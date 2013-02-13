@@ -1,0 +1,5 @@
+
+const derpo = require './'
+
+console.log derpo.evaluate "1;2"
+

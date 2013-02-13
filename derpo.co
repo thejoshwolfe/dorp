@@ -1,0 +1,63 @@
+
+token_patterns =
+  * name: \whitespace, regex: /\s+/
+  * name: \identifier, regex: /[A-Za-z_][A-Za-z_0-9]*/
+  * name: \number,     regex: /[0-9]+/
+  * name: \symbol,     regex: /[;]/
+
+function tokenize source, patterns
+  patterns = patterns.concat [{name: null, regex: /./}]
+  regex = new RegExp ("(#{pattern.regex.source})" for pattern of patterns).join("|")
+  tokens = []
+  offset = 0
+  while source.length > 0
+    match = source.match regex
+    type = (patterns[i].name if match[i+1] != null for i from 1 til patterns.length)[0]
+    if type == null
+      throw new Error "invalid character #{JSON.stringify source[0]} at offset #{offset}"
+    tokens.push {text: match[0], offset, type: type}
+    source = source.substr match.index + match[0].length
+    offset += match[0].length
+  tokens
+
+parse_rules =
+  block: <[expression ; expression]>
+  expression: <[number]>
+
+function parse tokens, rules, top_level_type
+  root = new Node top_level_type
+  end_index = parse_node root, 0
+  if end_index < tokens.length
+    throw new Error "expected end of input at offset #{tokens[end_index].offset}"
+  return root
+  function parse_node node, index
+    rule = rules[node.type]
+    for part of rule
+      token = tokens[index]
+      if rules[part]?
+        sub_node = new Node part
+        index = parse_node sub_node, index
+        node.things.push sub_node
+      else if part is token.type
+        node.things.push token
+        index++
+      else
+        # must be a text match on this token
+        if token.type is not \symbol
+          throw new Error "expected symbol, got #{token.type} at offset #{token.offset}"
+        if token.text is not part
+          throw new Error "expected #{JSON.stringify part}, got #{JSON.stringify token.text} at offset #{token.offset}"
+        node.things.push token
+        index++
+    index
+
+class Node
+  (@type) ->
+    @things = []
+
+exports.evaluate = evaluate
+function evaluate source
+  tokens = tokenize source, token_patterns
+  program = parse tokens, parse_rules, \block
+  console.log JSON.stringify program, null, "  "
+  program.things[2].things[0].text

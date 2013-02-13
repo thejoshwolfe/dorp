@@ -1,0 +1,16 @@
+{
+  "name": "derpo",
+  "version": "0.0.0",
+  "description": "TODO",
+  "main": "derpo.js",
+  "scripts": {
+    "test": "coco -c derpo.co && coco test.co"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/thejoshwolfe/derpo.git"
+  },
+  "author": "Josh Wolfe <thejoshwolfe@gmail.com>",
+  "license": "BSD",
+  "readmeFilename": "readme.md"
+}
