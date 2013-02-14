@@ -12,10 +12,11 @@ function tokenize source, patterns
   offset = 0
   while source.length > 0
     match = source.match regex
-    type = (patterns[i].name if match[i+1] != null for i from 1 til patterns.length)[0]
+    type = (patterns[i].name if match[i+1] != null for i from 0 til patterns.length)[0]
     if type == null
       throw new Error "invalid character #{JSON.stringify source[0]} at offset #{offset}"
-    tokens.push {text: match[0], offset, type: type}
+    if type is not \whitespace
+      tokens.push {text: match[0], offset, type: type}
     source = source.substr match.index + match[0].length
     offset += match[0].length
   tokens
@@ -24,7 +25,12 @@ parse_rules = do ->
   # rules
   return {}=
     block: list_with_optional_elements \expression, \;, type: \Block
-    expression: operator_chain \sum, <[=]>, type: \Assignment
+    expression: matcher: any rule(\definition), rule(\assignment)
+    definition:
+      matcher: sequence token(\identifier, \def), rule(\assignment)
+      type: \Definition
+      transform: !(node) -> node.value = node.value.1
+    assignment: operator_chain \sum, <[=]>, type: \Assignment
     sum: operator_chain \term, <[+ -]>, type: \Arithmetic
     term: operator_chain \atom, <[* /]>, type: \Multiplicative
     atom: matcher: any rule(\number), rule(\identifier)
@@ -140,9 +146,20 @@ function parse tokens, rules, top_level_type
 function evaluate node, context
   switch node.type
     case \Block
+      passes = [[],[]]
       for sub_node of node.value
-        value = evaluate sub_node, context
+        if sub_node.type is \Definition
+          passes.0.push sub_node
+        else
+          passes.1.push sub_node
+      for pass of passes
+        for sub_node of pass
+          value = evaluate sub_node, context
       value
+    case \Definition
+      if node.value.type is not \Assignment
+        throw new Error "#{JSON.stringify \def} must be followed by an assignment"
+      evaluate node.value, context
     case \Assignment
       value = evaluate node.value.2, context
       target = node.value.0
