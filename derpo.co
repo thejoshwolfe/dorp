@@ -3,7 +3,7 @@ token_patterns =
   * name: \whitespace, regex: /\s+/
   * name: \identifier, regex: /[A-Za-z_][A-Za-z_0-9]*/
   * name: \number,     regex: /[0-9]+/
-  * name: \symbol,     regex: /[;+\-*\/]/
+  * name: \symbol,     regex: /[;+\-*\/=]/
 
 function tokenize source, patterns
   patterns = patterns.concat [{name: null, regex: /./}]
@@ -24,7 +24,8 @@ parse_rules = do ->
   # rules
   return {}=
     block: list_with_optional_elements \expression, \;, type: \Block
-    expression: operator_chain \term, <[+ -]>, type: \Arithmetic
+    expression: operator_chain \sum, <[=]>, type: \Assignment
+    sum: operator_chain \term, <[+ -]>, type: \Arithmetic
     term: operator_chain \atom, <[* /]>, type: \Multiplicative
     atom: matcher: any rule(\number), rule(\identifier)
     number:
@@ -136,29 +137,38 @@ function parse tokens, rules, top_level_type
         result <<< {matcher.type} if matcher.type?
       result
 
-function evaluate node
+function evaluate node, context
   switch node.type
     case \Block
       for sub_node of node.value
-        value = evaluate sub_node
+        value = evaluate sub_node, context
       value
-    case \Number
-      return node.value
-    case \Identifier
-      0 # TODO
+    case \Assignment
+      value = evaluate node.value.2, context
+      target = node.value.0
+      if target.type is not \Identifier
+        throw new Error "can only assign to identifiers. at token index #{target.token_start}"
+      context[target.value] = value
     case \Arithmetic, \Multiplicative
-      left = evaluate node.value.0
-      right = evaluate node.value.2
+      left = evaluate node.value.0, context
+      right = evaluate node.value.2, context
       switch node.value.1.value
         case \+ then left + right
         case \- then left - right
         case \* then left * right
         case \/ then left / right
         default throw new Error
+    case \Number
+      node.value
+    case \Identifier
+      value = context[node.value]
+      unless value?
+        throw new Error "undefined variable #{JSON.stringify node.value}. at token index #{node.token_start}"
+      value
     default throw new Error node.type
 
 exports.evaluate = (source) ->
   tokens = tokenize source, token_patterns
   program = parse tokens, parse_rules, \block
   # console.log JSON.stringify program, null, "  "
-  evaluate program
+  evaluate program, {}
