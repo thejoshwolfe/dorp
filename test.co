@@ -1,15 +1,15 @@
 
-const derpo = require './'
+const dorp = require './'
 
 if true
-  console.log derpo.evaluate ""
-  console.log derpo.evaluate "a=1;a"
-  console.log derpo.evaluate "b=a+1;def a=1;b"
-  console.log derpo.evaluate "1*2+3/4"
-  console.log derpo.evaluate "1*(2+3)/4"
+  console.log dorp.evaluate ""
+  console.log dorp.evaluate "a=1;a"
+  console.log dorp.evaluate "b=a+1;def a=1;b"
+  console.log dorp.evaluate "1*2+3/4"
+  console.log dorp.evaluate "1*(2+3)/4"
 
 # should be 4
-console.log derpo.evaluate """
+console.log dorp.evaluate """
 b = a*a;
 def a = {
   c = 1;
@@ -19,7 +19,7 @@ b
 """
 
 # should be 0
-console.log derpo.evaluate """
+console.log dorp.evaluate """
 a = 0;
 b = 1;
 b = {

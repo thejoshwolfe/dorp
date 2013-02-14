@@ -1,14 +1,14 @@
 {
-  "name": "derpo",
+  "name": "dorp",
   "version": "0.0.0",
-  "description": "TODO",
-  "main": "derpo.js",
+  "description": "just hrop dorpin around making a programming language",
+  "main": "dorp.js",
   "scripts": {
-    "test": "coco -c derpo.co && coco test.co"
+    "test": "coco -c dorp.co && coco test.co"
   },
   "repository": {
     "type": "git",
-    "url": "git://github.com/thejoshwolfe/derpo.git"
+    "url": "git://github.com/thejoshwolfe/dorp.git"
   },
   "author": "Josh Wolfe <thejoshwolfe@gmail.com>",
   "license": "BSD",
