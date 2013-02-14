@@ -3,7 +3,7 @@ token_patterns =
   * name: \whitespace, regex: /\s+/
   * name: \identifier, regex: /[A-Za-z_][A-Za-z_0-9]*/
   * name: \number,     regex: /[0-9]+/
-  * name: \symbol,     regex: /[;]/
+  * name: \symbol,     regex: /[;+-]/
 
 function tokenize source, patterns
   patterns = patterns.concat [{name: null, regex: /./}]
@@ -21,27 +21,46 @@ function tokenize source, patterns
   tokens
 
 parse_rules = do ->
-  number = token \number
-  number.type = \Number
-  number.transform = (token) -> parseInt token.text, 10
-  function list_with_separator rule_name, separator, options
+  function list_with_optional_elements rule_name, separator, options
     matcher = maybe sequence rule(rule_name), repeat sequence token(\symbol, separator), maybe rule(rule_name)
-    transform = (first_sequence) ->
-      return [] unless first_sequence?
-      result = [first_sequence.0]
-      rest = first_sequence.1.value
+    transform = !(node) ->
+      return node.value = [] unless node.value?
+      result = [node.value.0]
+      rest = node.value.1.value
       for separator_and_element of rest
         element = separator_and_element.value.1
         result.push element if element.value?
-      result
+      node.value = result
     return {options.type, matcher, transform}
+  function operator_chain rule_name, operators, options
+    matcher = sequence rule(rule_name), repeat sequence any(...(token(\symbol, operator) for operator of operators)), rule(rule_name)
+    transform = !(node) ->
+      left = node.value.0
+      for operator_and_right of node.value.1.value
+        [operator, right] = operator_and_right.value
+        operator.value = operator.value.text
+        left = {
+          left.token_start
+          right.token_end
+          options.type
+          value: [left, operator, right]
+        }
+      node <<< {left.value, left.type}
+    return {matcher, transform}
+
   return {}=
-    block: list_with_separator \expression, \;, type: \Block
-    expression: matcher: any number, rule(\identifier)
+    block: list_with_optional_elements \expression, \;, type: \Block
+    expression: operator_chain \atom, <[+ -]>, type: \Arithmetic
+    atom: matcher: any rule(\number), rule(\identifier)
+    number:
+      matcher: token \number
+      type: \Number
+      transform: !(node) -> node.value = Number node.value.text
     identifier:
       matcher: token \identifier
       type: \Identifier
-      transform: (token) -> token.text
+      transform: !(node) -> node.value = node.value.text
+
   function token token_type, text then {control: \token, token_type, text}
   function rule name              then {control: \rule,  name}
   function sequence               then {control: \sequence, matchers: Array.prototype.slice.apply arguments}
@@ -58,7 +77,7 @@ function parse tokens, rules, top_level_type
     rule = rules[type]
     result = deal_with_matcher rule.matcher, index, null_on_error
     if result?
-      result.value = rule.transform result.value if rule.transform?
+      rule.transform result if rule.transform?
       result <<< {rule.type} if rule.type?
     return result
     function deal_with_matcher matcher, index, null_on_error
@@ -109,7 +128,7 @@ function parse tokens, rules, top_level_type
           result = sub_result
         default throw new Error matcher.control
       if result?
-        result.value = matcher.transform result.value if matcher.transform?
+        matcher.transform result if matcher.transform?
         result <<< {matcher.type} if matcher.type?
       result
 
