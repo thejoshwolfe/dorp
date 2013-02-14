@@ -1,7 +1,7 @@
 {
   "name": "dorp",
   "version": "0.0.0",
-  "description": "just hrop dorpin around making a programming language",
+  "description": "just horp dorpin around making a programming language",
   "main": "dorp.js",
   "scripts": {
     "test": "coco -c dorp.co && coco test.co"
