@@ -1,11 +1,12 @@
 
 const derpo = require './'
 
-if false
+if true
   console.log derpo.evaluate ""
   console.log derpo.evaluate "a=1;a"
   console.log derpo.evaluate "b=a+1;def a=1;b"
   console.log derpo.evaluate "1*2+3/4"
+  console.log derpo.evaluate "1*(2+3)/4"
 
 # should be 4
 console.log derpo.evaluate """

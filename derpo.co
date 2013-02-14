@@ -3,7 +3,7 @@ token_patterns =
   * name: \whitespace, regex: /\s+/
   * name: \identifier, regex: /[A-Za-z_][A-Za-z_0-9]*/
   * name: \number,     regex: /[0-9]+/
-  * name: \symbol,     regex: /[;+\-*\/={}]/
+  * name: \symbol,     regex: /[;+\-*\/={}()]/
 
 function tokenize source, patterns
   patterns = patterns.concat [{name: null, regex: /./}]
@@ -37,7 +37,11 @@ parse_rules = do ->
     assignment: operator_chain \sum, <[=]>, type: \Assignment
     sum: operator_chain \term, <[+ -]>, type: \Arithmetic
     term: operator_chain \atom, <[* /]>, type: \Multiplicative
-    atom: matcher: any rule(\block), rule(\number), rule(\identifier)
+    atom: matcher: any rule(\block), rule(\parens), rule(\number), rule(\identifier)
+    parens:
+      matcher: sequence token(\symbol, \(), rule(\expression), token(\symbol, \))
+      transform: !(node) ->
+        {node.value, node.type} = node.value.1
     number:
       matcher: token \number
       type: \Number
