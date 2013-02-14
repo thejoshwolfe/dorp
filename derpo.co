@@ -37,13 +37,17 @@ parse_rules = do ->
     return {options.type, matcher, transform}
   return {}=
     block: list_with_separator \expression, \;, type: \Block
-    expression:
-      matcher: number
+    expression: matcher: any number, rule(\identifier)
+    identifier:
+      matcher: token \identifier
+      type: \Identifier
+      transform: (token) -> token.text
   function token token_type, text then {control: \token, token_type, text}
-  function rule name        then {control: \rule,  name}
-  function sequence         then {control: \sequence, matchers: Array.prototype.slice.apply arguments}
-  function maybe matcher    then {control: \maybe, matcher}
-  function repeat matcher   then {control: \repeat, matcher}
+  function rule name              then {control: \rule,  name}
+  function sequence               then {control: \sequence, matchers: Array.prototype.slice.apply arguments}
+  function maybe matcher          then {control: \maybe, matcher}
+  function repeat matcher         then {control: \repeat, matcher}
+  function any                    then {control: \any, matchers: Array.prototype.slice.apply arguments}
 
 function parse tokens, rules, top_level_type
   root = parse_node top_level_type, 0
@@ -58,11 +62,11 @@ function parse tokens, rules, top_level_type
       result <<< {rule.type} if rule.type?
     return result
     function deal_with_matcher matcher, index, null_on_error
+      throw_errors = if null_on_error then null else true
       result = token_start: index
       switch matcher.control
         case \token
           token = tokens[index]
-          throw_errors = if null_on_error then null else true
           unless token?
             return throw_errors and throw new Error "expected #{matcher.token_type}, got end of input"
           if token.type is not matcher.token_type
@@ -96,14 +100,24 @@ function parse tokens, rules, top_level_type
             result.value.push sub_result
             index = sub_result.token_end
           result.token_end = index
+        case \any
+          for sub_matcher of matcher.matchers
+            sub_result = deal_with_matcher sub_matcher, index, true
+            break if sub_result?
+          unless sub_result?
+            return throw_errors and throw new Error "expected things, got none of them at offset #{tokens[index].offset}"
+          result = sub_result
         default throw new Error matcher.control
       if result?
         result.value = matcher.transform result.value if matcher.transform?
         result <<< {matcher.type} if matcher.type?
       result
 
-exports.evaluate = evaluate
-function evaluate source
+function evaluate program
+  program.value[program.value.length - 1]?.value
+
+exports.evaluate = (source) ->
   tokens = tokenize source, token_patterns
   program = parse tokens, parse_rules, \block
   console.log JSON.stringify program, null, "  "
+  evaluate program
