@@ -6,6 +6,9 @@
   "scripts": {
     "test": "coco -c dorp.co && coco test.co"
   },
+  "devDependencies": {
+    "coco": "~0.9.0"
+  },
   "repository": {
     "type": "git",
     "url": "git://github.com/thejoshwolfe/dorp.git"
