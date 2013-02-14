@@ -3,7 +3,7 @@ token_patterns =
   * name: \whitespace, regex: /\s+/
   * name: \identifier, regex: /[A-Za-z_][A-Za-z_0-9]*/
   * name: \number,     regex: /[0-9]+/
-  * name: \symbol,     regex: /[;+\-*\/=]/
+  * name: \symbol,     regex: /[;+\-*\/={}]/
 
 function tokenize source, patterns
   patterns = patterns.concat [{name: null, regex: /./}]
@@ -24,7 +24,11 @@ function tokenize source, patterns
 parse_rules = do ->
   # rules
   return {}=
-    block: list_with_optional_elements \expression, \;, type: \Block
+    block:
+      matcher: sequence token(\symbol, \{), rule(\block_contents), token(\symbol, \})
+      transform: !(node) ->
+        {node.value, node.type} = node.value.1
+    block_contents: list_with_optional_elements \expression, \;, type: \Block
     expression: matcher: any rule(\definition), rule(\assignment)
     definition:
       matcher: sequence token(\identifier, \def), rule(\assignment)
@@ -33,7 +37,7 @@ parse_rules = do ->
     assignment: operator_chain \sum, <[=]>, type: \Assignment
     sum: operator_chain \term, <[+ -]>, type: \Arithmetic
     term: operator_chain \atom, <[* /]>, type: \Multiplicative
-    atom: matcher: any rule(\number), rule(\identifier)
+    atom: matcher: any rule(\block), rule(\number), rule(\identifier)
     number:
       matcher: token \number
       type: \Number
@@ -192,6 +196,6 @@ function evaluate node, context
 
 exports.evaluate = (source) ->
   tokens = tokenize source, token_patterns
-  program = parse tokens, parse_rules, \block
+  program = parse tokens, parse_rules, \block_contents
   # console.log JSON.stringify program, null, "  "
   evaluate program, {}
