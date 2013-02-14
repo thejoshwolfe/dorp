@@ -146,15 +146,19 @@ function parse tokens, rules, top_level_type
 function evaluate node, context
   switch node.type
     case \Block
-      passes = [[],[]]
+      def_nodes = []
+      normal_nodes = []
       for sub_node of node.value
         if sub_node.type is \Definition
-          passes.0.push sub_node
+          def_nodes.push sub_node
         else
-          passes.1.push sub_node
-      for pass of passes
-        for sub_node of pass
-          value = evaluate sub_node, context
+          normal_nodes.push sub_node
+      for sub_node of def_nodes
+        evaluate sub_node, context
+      for _, variable in context
+        variable.constant = true
+      for sub_node of normal_nodes
+        value = evaluate sub_node, context
       value
     case \Definition
       if node.value.type is not \Assignment
@@ -165,7 +169,9 @@ function evaluate node, context
       target = node.value.0
       if target.type is not \Identifier
         throw new Error "can only assign to identifiers. at token index #{target.token_start}"
-      context[target.value] = value
+      if context[target.value]?.constant
+        throw new Error "cannot assign to constant variable #{JSON.stringify target.value}"
+      context[target.value] = {value}
     case \Arithmetic, \Multiplicative
       left = evaluate node.value.0, context
       right = evaluate node.value.2, context
@@ -178,10 +184,10 @@ function evaluate node, context
     case \Number
       node.value
     case \Identifier
-      value = context[node.value]
-      unless value?
+      variable = context[node.value]
+      unless variable?
         throw new Error "undefined variable #{JSON.stringify node.value}. at token index #{node.token_start}"
-      value
+      variable.value
     default throw new Error node.type
 
 exports.evaluate = (source) ->
