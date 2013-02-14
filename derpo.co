@@ -147,9 +147,18 @@ function parse tokens, rules, top_level_type
         result <<< {matcher.type} if matcher.type?
       result
 
+class Context
+  (@parent) ->
+    @names = {}
+    @all_assignments_are_constants = false
+  lookup: (name) ->
+    return result if (result = @names[name])?
+    return @parent?.lookup name
+
 function evaluate node, context
   switch node.type
     case \Block
+      context = new Context context
       def_nodes = []
       normal_nodes = []
       for sub_node of node.value
@@ -157,10 +166,10 @@ function evaluate node, context
           def_nodes.push sub_node
         else
           normal_nodes.push sub_node
+      context.all_assignments_are_constants = true
       for sub_node of def_nodes
         evaluate sub_node, context
-      for _, variable in context
-        variable.constant = true
+      context.all_assignments_are_constants = false
       for sub_node of normal_nodes
         value = evaluate sub_node, context
       value
@@ -173,9 +182,12 @@ function evaluate node, context
       target = node.value.0
       if target.type is not \Identifier
         throw new Error "can only assign to identifiers. at token index #{target.token_start}"
-      if context[target.value]?.constant
-        throw new Error "cannot assign to constant variable #{JSON.stringify target.value}"
-      context[target.value] = {value}
+      name = target.value
+      if context.names[name]?.constant
+        throw new Error "cannot assign to constant variable #{JSON.stringify name}"
+      constant = context.all_assignments_are_constants
+      context.names[name] = {value, constant}
+      value
     case \Arithmetic, \Multiplicative
       left = evaluate node.value.0, context
       right = evaluate node.value.2, context
@@ -188,7 +200,7 @@ function evaluate node, context
     case \Number
       node.value
     case \Identifier
-      variable = context[node.value]
+      variable = context.lookup(node.value)
       unless variable?
         throw new Error "undefined variable #{JSON.stringify node.value}. at token index #{node.token_start}"
       variable.value
@@ -198,4 +210,4 @@ exports.evaluate = (source) ->
   tokens = tokenize source, token_patterns
   program = parse tokens, parse_rules, \block_contents
   # console.log JSON.stringify program, null, "  "
-  evaluate program, {}
+  evaluate program, new Context

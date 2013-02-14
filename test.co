@@ -16,3 +16,14 @@ def a = {
 };
 b
 """
+
+# should be 0
+console.log derpo.evaluate """
+a = 0;
+b = 1;
+b = {
+  a = b;
+  a
+};
+a
+"""
