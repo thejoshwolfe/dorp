@@ -3,7 +3,7 @@ token_patterns =
   * name: \whitespace, regex: /\s+/
   * name: \identifier, regex: /[A-Za-z_][A-Za-z_0-9]*/
   * name: \number,     regex: /[0-9]+/
-  * name: \symbol,     regex: /[;+-]/
+  * name: \symbol,     regex: /[;+\-*\/]/
 
 function tokenize source, patterns
   patterns = patterns.concat [{name: null, regex: /./}]
@@ -21,6 +21,30 @@ function tokenize source, patterns
   tokens
 
 parse_rules = do ->
+  # rules
+  return {}=
+    block: list_with_optional_elements \expression, \;, type: \Block
+    expression: operator_chain \term, <[+ -]>, type: \Arithmetic
+    term: operator_chain \atom, <[* /]>, type: \Multiplicative
+    atom: matcher: any rule(\number), rule(\identifier)
+    number:
+      matcher: token \number
+      type: \Number
+      transform: !(node) -> node.value = Number node.value.text
+    identifier:
+      matcher: token \identifier
+      type: \Identifier
+      transform: !(node) -> node.value = node.value.text
+
+  # strutures to make the rules
+  function token token_type, text then {control: \token, token_type, text}
+  function rule name              then {control: \rule,  name}
+  function sequence               then {control: \sequence, matchers: Array.prototype.slice.apply arguments}
+  function maybe matcher          then {control: \maybe, matcher}
+  function repeat matcher         then {control: \repeat, matcher}
+  function any                    then {control: \any, matchers: Array.prototype.slice.apply arguments}
+
+  # utility functions for generating rules
   function list_with_optional_elements rule_name, separator, options
     matcher = maybe sequence rule(rule_name), repeat sequence token(\symbol, separator), maybe rule(rule_name)
     transform = !(node) ->
@@ -47,26 +71,6 @@ parse_rules = do ->
         }
       node <<< {left.value, left.type}
     return {matcher, transform}
-
-  return {}=
-    block: list_with_optional_elements \expression, \;, type: \Block
-    expression: operator_chain \atom, <[+ -]>, type: \Arithmetic
-    atom: matcher: any rule(\number), rule(\identifier)
-    number:
-      matcher: token \number
-      type: \Number
-      transform: !(node) -> node.value = Number node.value.text
-    identifier:
-      matcher: token \identifier
-      type: \Identifier
-      transform: !(node) -> node.value = node.value.text
-
-  function token token_type, text then {control: \token, token_type, text}
-  function rule name              then {control: \rule,  name}
-  function sequence               then {control: \sequence, matchers: Array.prototype.slice.apply arguments}
-  function maybe matcher          then {control: \maybe, matcher}
-  function repeat matcher         then {control: \repeat, matcher}
-  function any                    then {control: \any, matchers: Array.prototype.slice.apply arguments}
 
 function parse tokens, rules, top_level_type
   root = parse_node top_level_type, 0
