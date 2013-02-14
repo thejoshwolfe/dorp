@@ -24,56 +24,82 @@ parse_rules = do ->
   number = token \number
   number.type = \Number
   number.transform = (token) -> parseInt token.text, 10
+  function list_with_separator rule_name, separator, options
+    matcher = maybe sequence rule(rule_name), repeat sequence token(\symbol, separator), maybe rule(rule_name)
+    transform = (first_sequence) ->
+      return [] unless first_sequence?
+      result = [first_sequence.0]
+      rest = first_sequence.1.value
+      for separator_and_element of rest
+        element = separator_and_element.value.1
+        result.push element if element.value?
+      result
+    return {options.type, matcher, transform}
   return {}=
-    block:
-      type: \Block
-      matcher: sequence rule(\expression), token(\symbol, \;), rule(\expression)
-      # discard separators
-      transform: (elements) -> (element if i % 2 == 0 for element, i of elements)
+    block: list_with_separator \expression, \;, type: \Block
     expression:
       matcher: number
   function token token_type, text then {control: \token, token_type, text}
   function rule name        then {control: \rule,  name}
   function sequence         then {control: \sequence, matchers: Array.prototype.slice.apply arguments}
+  function maybe matcher    then {control: \maybe, matcher}
+  function repeat matcher   then {control: \repeat, matcher}
 
 function parse tokens, rules, top_level_type
   root = parse_node top_level_type, 0
   if root.token_end < tokens.length
     throw new Error "expected end of input at offset #{tokens[root.token_end].offset}"
   return root
-  function parse_node type, index
+  function parse_node type, index, null_on_error
     rule = rules[type]
-    result = deal_with_matcher rule.matcher, index
-    node = token_start: index
-    node <<< {result.token_end, result.value, result.type}
-    if rule.transform?
-      node.value = rule.transform node.value
-    node <<< {rule.type} if rule.type?
-    return node
-    function deal_with_matcher matcher, index
-      token = tokens[index]
+    result = deal_with_matcher rule.matcher, index, null_on_error
+    if result?
+      result.value = rule.transform result.value if rule.transform?
+      result <<< {rule.type} if rule.type?
+    return result
+    function deal_with_matcher matcher, index, null_on_error
       result = token_start: index
       switch matcher.control
         case \token
+          token = tokens[index]
+          throw_errors = if null_on_error then null else true
+          unless token?
+            return throw_errors and throw new Error "expected #{matcher.token_type}, got end of input"
           if token.type is not matcher.token_type
-            throw new Error "expected #{matcher.token_type}, got #{token.type} at offset #{token.offset}"
+            return throw_errors and throw new Error "expected #{matcher.token_type}, got #{token.type} at offset #{token.offset}"
           if matcher.text? and token.text is not matcher.text
-            throw new Error "expected #{JSON.stringify matcher.text}, got #{JSON.stringify token.text} at offset #{token.offset}"
+            return throw_errors and throw new Error "expected #{JSON.stringify matcher.text}, got #{JSON.stringify token.text} at offset #{token.offset}"
           result.value = token
           result.token_end = index + 1
         case \rule
-          result = parse_node matcher.name, index
+          result = parse_node matcher.name, index, null_on_error
         case \sequence
           result.value = []
           for sub_matcher of matcher.matchers
-            sub_result = deal_with_matcher sub_matcher, index
+            sub_result = deal_with_matcher sub_matcher, index, null_on_error
+            return null unless sub_result?
+            result.value.push sub_result
+            index = sub_result.token_end
+            null_on_error = false
+          result.token_end = index
+        case \maybe
+          maybe_result = deal_with_matcher matcher.matcher, index, true
+          if maybe_result?
+            result = maybe_result
+          else
+            result.token_end = index
+        case \repeat
+          result.value = []
+          while true
+            sub_result = deal_with_matcher matcher.matcher, index, true
+            break unless sub_result?
             result.value.push sub_result
             index = sub_result.token_end
           result.token_end = index
-        default throw new Error
-      if matcher.transform?
-        result.value = matcher.transform result.value
-      result <<< {matcher.type} if matcher.type?
+        default throw new Error matcher.control
+      if result?
+        result.value = matcher.transform result.value if matcher.transform?
+        result <<< {matcher.type} if matcher.type?
       result
 
 exports.evaluate = evaluate

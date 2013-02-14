@@ -1,5 +1,9 @@
 
 const derpo = require './'
 
-console.log derpo.evaluate "1;2"
+derpo.evaluate ""
+derpo.evaluate "1"
+derpo.evaluate "1;"
+derpo.evaluate "1;2"
+derpo.evaluate "1;2;3"
 
