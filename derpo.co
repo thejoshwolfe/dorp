@@ -136,11 +136,29 @@ function parse tokens, rules, top_level_type
         result <<< {matcher.type} if matcher.type?
       result
 
-function evaluate program
-  program.value[program.value.length - 1]?.value
+function evaluate node
+  switch node.type
+    case \Block
+      for sub_node of node.value
+        value = evaluate sub_node
+      value
+    case \Number
+      return node.value
+    case \Identifier
+      0 # TODO
+    case \Arithmetic, \Multiplicative
+      left = evaluate node.value.0
+      right = evaluate node.value.2
+      switch node.value.1.value
+        case \+ then left + right
+        case \- then left - right
+        case \* then left * right
+        case \/ then left / right
+        default throw new Error
+    default throw new Error node.type
 
 exports.evaluate = (source) ->
   tokens = tokenize source, token_patterns
   program = parse tokens, parse_rules, \block
-  console.log JSON.stringify program, null, "  "
+  # console.log JSON.stringify program, null, "  "
   evaluate program
