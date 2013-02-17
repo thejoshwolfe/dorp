@@ -1,9 +1,10 @@
 
 token_patterns =
   * name: \whitespace, regex: /\s+/
+  * name: \comment,    regex: /#.*/
   * name: \identifier, regex: /[A-Za-z_][A-Za-z_0-9]*/
   * name: \number,     regex: /[0-9]+/
-  * name: \symbol,     regex: /[;+\-*\/={}()]/
+  * name: \symbol,     regex: /[;,+\-*\/={}()]/
 
 function tokenize source, patterns
   patterns = patterns.concat [{name: null, regex: /./}]
@@ -15,7 +16,7 @@ function tokenize source, patterns
     type = (patterns[i].name if match[i+1] != null for i from 0 til patterns.length)[0]
     if type == null
       throw new Error "invalid character #{JSON.stringify source[0]} at offset #{offset}"
-    if type is not \whitespace
+    if type not of <[whitespace comment]>
       tokens.push {text: match[0], offset, type: type}
     source = source.substr match.index + match[0].length
     offset += match[0].length
@@ -29,17 +30,33 @@ parse_rules = do ->
       transform: !(node) ->
         {node.value, node.type} = node.value.1
     block_contents: list_with_optional_elements \statement, \;, type: \Block
-    statement: matcher: any rule(\definition), rule(\assignment)
+    statement: matcher: any rule(\definition), rule(\expression)
     definition:
       matcher: sequence token(\identifier, \def), rule(\assignment)
       type: \Definition
       transform: !(node) -> node.value = node.value.1
-    assignment: operator_chain \sum, <[=]>, type: \Assignment
+    expression: operator_chain \sum, <[=]>, type: \Assignment
     sum: operator_chain \term, <[+ -]>, type: \Arithmetic
-    term: operator_chain \atom, <[* /]>, type: \Multiplicative
+    term: operator_chain \trailable, <[* /]>, type: \Multiplicative
+    trailable:
+      matcher: sequence rule(\atom), repeat rule(\trailer)
+      transform: !(node) ->
+        trails = node.value.1.value
+        if trails.length is 0
+          return {node.value, node.type} = node.value.0
+        result = node.value.0
+        for trail of trails
+          trail.value.splice(0, 0, result)
+          result = trail
+        {node.value, node.type} = result
+    trailer:
+      matcher: sequence token(\symbol, \(), rule(\expression_list), token(\symbol, \))
+      type: \Call
+      transform: !(node) -> node.value = node.value.1.value
+    expression_list: list_with_optional_elements \expression, \,
     atom: matcher: any rule(\block), rule(\parens), rule(\number), rule(\identifier)
     parens:
-      matcher: sequence token(\symbol, \(), rule(\assignment), token(\symbol, \))
+      matcher: sequence token(\symbol, \(), rule(\expression), token(\symbol, \))
       transform: !(node) ->
         {node.value, node.type} = node.value.1
     number:
@@ -60,7 +77,7 @@ parse_rules = do ->
   function any                    then {control: \any, matchers: Array.prototype.slice.apply arguments}
 
   # utility functions for generating rules
-  function list_with_optional_elements rule_name, separator, options
+  function list_with_optional_elements rule_name, separator, options={}
     matcher = maybe sequence rule(rule_name), repeat sequence token(\symbol, separator), maybe rule(rule_name)
     transform = !(node) ->
       return node.value = [] unless node.value?
@@ -201,6 +218,12 @@ function evaluate node, context
         case \* then left * right
         case \/ then left / right
         default throw new Error
+    case \Call
+      func = evaluate node.value.0, context
+      args = []
+      for i from 1 til node.value.length
+        args.push evaluate node.value[i], context
+      func(args[0])
     case \Number
       node.value
     case \Identifier
@@ -210,16 +233,25 @@ function evaluate node, context
       variable.value
     default throw new Error node.type
 
+function make_global_context
+  context = new Context
+  context.names =
+    print:
+      constant: true
+      value: (x) ->
+        console.log x;
+  context
+
 exports.evaluate = (source) ->
   tokens = tokenize source, token_patterns
   program = parse tokens, parse_rules, \block_contents
   # console.log JSON.stringify program, null, "  "
-  evaluate program, new Context
+  evaluate program, make_global_context!
 
 if require.main is module
   args = process.argv.slice 2
   file = args[0]
-  if args.length is not 1 or file is '-h' or file is '--help'
+  if args.length is not 1 or file of <[-h --help]>
     process.stderr.write("usage: #{process.argv.slice(0, 2).join ' '} source.dorp\n");
     process.exit 1
   fs = require \fs
