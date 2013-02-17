@@ -25,17 +25,19 @@ function tokenize source, patterns
 parse_rules = do ->
   # rules
   return {}=
-    block:
-      matcher: sequence token(\symbol, \{), rule(\block_contents), token(\symbol, \})
-      transform: !(node) ->
-        {node.value, node.type} = node.value.1
-    block_contents: list_with_optional_elements \statement, \;, type: \Block
+    block_contents: list_with_optional_elements \statement, \;, type: \BlockContents
     statement: matcher: any rule(\definition), rule(\expression)
     definition:
       matcher: sequence token(\identifier, \def), rule(\assignment)
       type: \Definition
       transform: !(node) -> node.value = node.value.1
-    expression: operator_chain \sum, <[=]>, type: \Assignment
+    expression: matcher: any rule(\do), rule(\assignment)
+    do:
+      matcher: sequence token(\identifier, \do), rule(\expression)
+      type: \Call
+      transform: !(node) -> node.value = [node.value.1]
+    # operator precedence
+    assignment: operator_chain \sum, <[=]>, type: \Assignment
     sum: operator_chain \term, <[+ -]>, type: \Arithmetic
     term: operator_chain \trailable, <[* /]>, type: \Multiplicative
     trailable:
@@ -54,11 +56,15 @@ parse_rules = do ->
       type: \Call
       transform: !(node) -> node.value = node.value.1.value
     expression_list: list_with_optional_elements \expression, \,
+    # terminals and groups
     atom: matcher: any rule(\block), rule(\parens), rule(\number), rule(\identifier)
     parens:
       matcher: sequence token(\symbol, \(), rule(\expression), token(\symbol, \))
-      transform: !(node) ->
-        {node.value, node.type} = node.value.1
+      transform: !(node) -> {node.value, node.type} = node.value.1
+    block:
+      matcher: sequence token(\symbol, \{), rule(\block_contents), token(\symbol, \})
+      type: \Block
+      transform: !(node) -> node.value = node.value.1
     number:
       matcher: token \number
       type: \Number
@@ -178,7 +184,7 @@ class Context
 
 function evaluate node, context
   switch node.type
-    case \Block
+    case \BlockContents
       context = new Context context
       def_nodes = []
       normal_nodes = []
@@ -223,7 +229,9 @@ function evaluate node, context
       args = []
       for i from 1 til node.value.length
         args.push evaluate node.value[i], context
-      func(args[0])
+      func(args)
+    case \Block
+      -> evaluate node.value, context
     case \Number
       node.value
     case \Identifier
@@ -238,8 +246,7 @@ function make_global_context
   context.names =
     print:
       constant: true
-      value: (x) ->
-        console.log x;
+      value: (args) -> console.log args.0
   context
 
 exports.evaluate = (source) ->

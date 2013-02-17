@@ -1,0 +1,2 @@
+do {print(1)}; # 1
+print(do {2}); # 2
