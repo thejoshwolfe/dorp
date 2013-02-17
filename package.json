@@ -3,8 +3,10 @@
   "version": "0.0.0",
   "description": "just horp dorpin around making a programming language",
   "main": "dorp.js",
+  "bin": "dorp.js",
   "scripts": {
-    "test": "coco -c dorp.co && coco test.co"
+    "build": "coco -c dorp.co",
+    "test": "npm run build && node dorp.js test/blank.dorp"
   },
   "devDependencies": {
     "coco": "~0.9.0"

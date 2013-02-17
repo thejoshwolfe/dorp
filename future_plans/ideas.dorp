@@ -1,0 +1,81 @@
+f()={};
+()={};
+f={};
+{};
+
+f(a)={};
+(a)={};
+
+square(list)={list.each((x)={x*x})};
+
+[1,2,3].each((x)={x*x});
+
+find(list, item) => {
+  list.each((x, i) = {
+    if x == item then return i;
+  });
+};
+
+pow(b, p) => {
+  r = 1
+  p.times({
+    r *= b
+  });
+  r
+};
+
+parse(content) => {
+  lines = content.split("\n");
+  meaningful_lines = lines.each((line)={
+    if line == "" then continue;
+    if line == "[end]" then break;
+    if line == "[error]" then return null;
+    line
+  });
+  return meaningful_lines
+};
+List.@each(block) => {
+  result = [];
+  i = -1;
+  loop do {
+    if ++i >= @length then break result;
+    result.push(
+      try block(@[i], i)
+      catch Continue as e if e.context == block.__return_context__ then continue
+      catch Break    as e if e.context == block.__return_context__ then break if e.value? then e.value else result
+    );
+  }
+};
+even = numbers.each((n)={if n % 2 is 0 then n else continue});
+
+# control structure; effective implementation;
+continue a; throw Continue(__return_context__, (a));
+break a; throw Break(__return_context__, (a));
+return a; throw Return(__return_context__, (a));
+=> {...}; {
+  __return_context__ = some_unique_thing;
+  try (...)
+  catch Return as e if e.context is __return_context__ then e.value
+};
+loop ...; (
+  try (
+    # start of loop
+    try (...)
+    catch Continue as e if e.context is __return_context__ then null
+    # goto start of loop
+  )
+  catch Break as e if e.context is __return_context__ then e.value
+)
+try a catch Name as name if b then ...; (
+  try (a)
+  catch Name as name then
+    if not (b) then rethrow (b) else (...)
+);
+
+list = [];
+list = [1,2,3];
+dict = [:];
+dict = [a:1,(a.trim()):2];
+set  = Set();
+set  = Set([1,2,3]);
+

@@ -215,3 +215,13 @@ exports.evaluate = (source) ->
   program = parse tokens, parse_rules, \block_contents
   # console.log JSON.stringify program, null, "  "
   evaluate program, new Context
+
+if require.main is module
+  args = process.argv.slice 2
+  file = args[0]
+  if args.length is not 1 or file is '-h' or file is '--help'
+    process.stderr.write("usage: #{process.argv.slice(0, 2).join ' '} source.dorp\n");
+    process.exit 1
+  fs = require \fs
+  source = fs.readFileSync file, \utf8
+  exports.evaluate source
