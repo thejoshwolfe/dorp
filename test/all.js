@@ -24,7 +24,6 @@ var done = 0;
         process.stdout.write("!");
         failzors.push(actual_output);
       }
-      //process.stdout.flush();
       done++;
       if (done >= tests.length) {
         console.log("");
