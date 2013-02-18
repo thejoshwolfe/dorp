@@ -6,7 +6,7 @@
   "bin": "dorp.js",
   "scripts": {
     "build": "coco -c dorp.co",
-    "test": "npm run build && node dorp.js test/operators.dorp"
+    "test": "npm run build && node test/all.js"
   },
   "devDependencies": {
     "coco": "~0.9.0"
