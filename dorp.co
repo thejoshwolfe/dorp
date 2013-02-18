@@ -95,7 +95,7 @@ parse_rules = do ->
       transform: !(node) -> node.value = node.value.text
 
   # strutures to make the rules
-  function token token_type, text then {control: \token, token_type, text}
+  function token token_type, text then {control: \token, token_type, text, type: \Token}
   function rule name              then {control: \rule,  name}
   function sequence               then {control: \sequence, matchers: Array.prototype.slice.apply arguments}
   function maybe matcher          then {control: \maybe, matcher}
@@ -294,18 +294,76 @@ function make_global_context
       value: (args) -> console.log args.0
   context
 
-exports.evaluate = (source) ->
-  tokens = tokenize source, token_patterns
-  program = parse tokens, parse_rules, \block_contents
-  # console.log JSON.stringify program, null, "  "
-  evaluate program, make_global_context!
+function print_tokens tokens
+  for token of tokens
+    console.log "#{token.type}: #{JSON.stringify token.text}"
+function print_ast ast, indentation=''
+  process.stdout.write indentation+"#{ast.type}: "
+  switch ast.type
+    case \Number, \Identifier, \Token
+      console.log JSON.stringify ast.value
+    case \Block
+      console.log ''
+      indentation += '  '
+      process.stdout.write indentation+'args: '
+      print_ast_value ast.value.args
+      process.stdout.write indentation+'contents: '
+      print_ast_value ast.value.contents
+    default
+      print_ast_value ast.value
+  function print_ast_value value
+      console.log ''
+      if value.type?
+        print_ast value, indentation+'  '
+      else if value.length?
+        for sub_ast of value
+          print_ast sub_ast, indentation+'  '
+      else
+        throw new Error ast.type
 
 if require.main is module
   args = process.argv.slice 2
-  file = args[0]
-  if args.length is not 1 or file of <[-h --help]>
-    process.stderr.write("usage: #{process.argv.slice(0, 2).join ' '} source.dorp\n");
+  usage = ->
+    process.stderr.write("""
+      usage: #{process.argv.slice(0, 2).join ' '} [options] source.dorp
+
+      options:
+        -h, --help
+        --tokens    just print the tokens
+        --ast       just print the syntax tree
+        -c          the source parameter is the source code, not a file
+    """ + "\n");
     process.exit 1
-  fs = require \fs
-  source = fs.readFileSync file, \utf8
-  exports.evaluate source
+  program_file = null
+  program_is_source = false
+  stop_at = null
+  for arg of args
+    usage! if program_file?
+    unless arg.match /^-/
+      program_file = arg
+      continue
+    switch arg
+      case \-h, \--help
+        usage!
+        usage! if stop_at?
+        stop_at = \ast
+      case \--tokens, \--ast
+        usage! if stop_at?
+        stop_at = arg.substr 2
+      case \-c
+        usage! if program_is_source
+        program_is_source = true
+      default usage!
+  if program_is_source
+    source = program_file
+  else
+    source = require(\fs).readFileSync program_file, \utf8
+  tokens = tokenize source, token_patterns
+  if stop_at is \tokens
+    print_tokens tokens
+    process.exit 1
+  ast = parse tokens, parse_rules, \block_contents
+  if stop_at is \ast
+    print_ast ast
+    process.exit 1
+  evaluate ast, make_global_context!
