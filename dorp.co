@@ -37,7 +37,7 @@ parse_rules = do ->
       type: \Call
       transform: !(node) -> node.value = [node.value.1]
     # operator precedence
-    assignment: operator_chain \sum, <[=]>, type: \Assignment, transform: !(node) ->
+    assignment: operator_chain \sum, <[=]>, right_to_left: true, type: \Assignment, transform: !(node) ->
       # if this is really a function declaration,
       #  move the argument declaration list into the block object,
       #  and isolate the actual target of the assignment
@@ -117,15 +117,26 @@ parse_rules = do ->
   function operator_chain rule_name, operators, options={}
     matcher = sequence rule(rule_name), repeat sequence any(...(token(\symbol, operator) for operator of operators)), rule(rule_name)
     transform = !(node) ->
-      left = node.value.0
+      components = [node.value.0]
       for operator_and_right of node.value.1.value
         [operator, right] = operator_and_right.value
         operator.value = operator.value.text
+        components.push operator
+        components.push right
+      if options.right_to_left?
+        components.reverse!
+      left = components.0
+      for i from 1 til components.length by 2
+        operator = components[i]
+        right = components[i+1]
+        value = [left, operator, right]
+        if options.right_to_left?
+          value.reverse!
         left = {
-          left.token_start
-          right.token_end
+          token_start: value.0.token_start
+          token_end: value.2.token_end
           options.type
-          value: [left, operator, right]
+          value
         }
         options.transform? left
       node <<< {left.value, left.type}

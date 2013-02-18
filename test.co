@@ -1,9 +1,0 @@
-
-const dorp = require './'
-
-console.log dorp.evaluate ""
-console.log dorp.evaluate "a=1;a"
-console.log dorp.evaluate "b=a+1;def a=1;b"
-console.log dorp.evaluate "1*2+3/4"
-console.log dorp.evaluate "1*(2+3)/4"
-
