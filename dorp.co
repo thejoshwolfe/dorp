@@ -37,7 +37,27 @@ parse_rules = do ->
       type: \Call
       transform: !(node) -> node.value = [node.value.1]
     # operator precedence
-    assignment: operator_chain \sum, <[=]>, type: \Assignment
+    assignment: operator_chain \sum, <[=]>, type: \Assignment, transform: !(node) ->
+      # if this is really a function declaration,
+      #  move the argument declaration list into the block object,
+      #  and isolate the actual target of the assignment
+      #  ex: f(a, b) = {...} becomes f = {...}
+      #  ex:  (a, b) = {...} becomes {...}
+      left = node.value.0
+      right = node.value.2
+      args = null
+      switch left.type
+        case \Call
+          node.value.0 = left.value.0
+          args = left.value.slice 1
+        case \Parens
+          args = left.value
+          # not really an assignment
+          {node.value, node.type} = right
+      if args?
+        if right.type is not \Block
+          throw new Error "cannot declare parameters for a #{right.type}. at token offset #{node.value.1.token_start}"
+        right.value.args = args
     sum: operator_chain \term, <[+ -]>, type: \Arithmetic
     term: operator_chain \trailable, <[* /]>, type: \Multiplicative
     trailable:
@@ -52,19 +72,19 @@ parse_rules = do ->
           result = trail
         {node.value, node.type} = result
     trailer:
-      matcher: sequence token(\symbol, \(), rule(\expression_list), token(\symbol, \))
+      matcher: any rule(\parens)
       type: \Call
-      transform: !(node) -> node.value = node.value.1.value
     expression_list: list_with_optional_elements \expression, \,
     # terminals and groups
     atom: matcher: any rule(\block), rule(\parens), rule(\number), rule(\identifier)
     parens:
-      matcher: sequence token(\symbol, \(), rule(\expression), token(\symbol, \))
-      transform: !(node) -> {node.value, node.type} = node.value.1
+      matcher: sequence token(\symbol, \(), rule(\expression_list), token(\symbol, \))
+      type: \Parens
+      transform: !(node) -> node.value = node.value.1.value
     block:
       matcher: sequence token(\symbol, \{), rule(\block_contents), token(\symbol, \})
       type: \Block
-      transform: !(node) -> node.value = node.value.1
+      transform: !(node) -> node.value = contents: node.value.1, args: []
     number:
       matcher: token \number
       type: \Number
@@ -94,7 +114,7 @@ parse_rules = do ->
         result.push element if element.value?
       node.value = result
     return {options.type, matcher, transform}
-  function operator_chain rule_name, operators, options
+  function operator_chain rule_name, operators, options={}
     matcher = sequence rule(rule_name), repeat sequence any(...(token(\symbol, operator) for operator of operators)), rule(rule_name)
     transform = !(node) ->
       left = node.value.0
@@ -107,6 +127,7 @@ parse_rules = do ->
           options.type
           value: [left, operator, right]
         }
+        options.transform? left
       node <<< {left.value, left.type}
     return {matcher, transform}
 
@@ -181,6 +202,16 @@ class Context
   lookup: (name) ->
     return result if (result = @names[name])?
     return @parent?.lookup name
+  assign: (target, value) ->
+    switch target.type
+      case \Identifier
+        name = target.value
+      default throw new Error "cannot assign to a #{target.type}. at token index #{target.token_start}"
+    if @names[name]?.constant
+      throw new Error "cannot assign to constant variable #{JSON.stringify name}"
+    constant = @all_assignments_are_constants
+    @names[name] = {value, constant}
+    value
 
 function evaluate node, context
   switch node.type
@@ -207,14 +238,7 @@ function evaluate node, context
     case \Assignment
       value = evaluate node.value.2, context
       target = node.value.0
-      if target.type is not \Identifier
-        throw new Error "can only assign to identifiers. at token index #{target.token_start}"
-      name = target.value
-      if context.names[name]?.constant
-        throw new Error "cannot assign to constant variable #{JSON.stringify name}"
-      constant = context.all_assignments_are_constants
-      context.names[name] = {value, constant}
-      value
+      context.assign target, value
     case \Arithmetic, \Multiplicative
       left = evaluate node.value.0, context
       right = evaluate node.value.2, context
@@ -230,8 +254,18 @@ function evaluate node, context
       for i from 1 til node.value.length
         args.push evaluate node.value[i], context
       func(args)
+    case \Parens
+      result = null
+      for element of node.value
+        result = evaluate element, context
+      result
     case \Block
-      -> evaluate node.value, context
+      parent_context = context
+      (args) ->
+        context = new Context parent_context
+        for arg, i of node.value.args
+          context.assign arg, args[i]
+        evaluate node.value.contents, context
     case \Number
       node.value
     case \Identifier
