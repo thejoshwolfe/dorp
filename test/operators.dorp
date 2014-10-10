@@ -1,5 +1,5 @@
 do {
-  b = a + 1;
+  var b = a + 1;
   def a = 1;
   print(b); # 2
 };
@@ -7,6 +7,7 @@ print(1*2+3/4);   # 2.75
 print(1*(2+3)/4); # 1.25
 
 do {
-  x = y = 2;
+  var x = 2;
+  var y = 2;
   print(x + y); # 4
 };
