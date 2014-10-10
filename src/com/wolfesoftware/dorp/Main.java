@@ -12,7 +12,8 @@ public class Main
     {
         String contents = readFile(new File(args[0]));
         List<Token> tokens = new Tokenizer(contents).tokenize();
-        System.out.println(join(tokens, "\n"));
+        SyntaxNode rootNode = new Parser(tokens).parse();
+        System.out.println(rootNode);
     }
 
     private static String readFile(File file) throws IOException

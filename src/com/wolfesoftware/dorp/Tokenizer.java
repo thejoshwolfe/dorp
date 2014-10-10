@@ -2,17 +2,18 @@ package com.wolfesoftware.dorp;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class Tokenizer
 {
-    private static class Asdf
+    private static class TokenTypeAndPattern
     {
         public final String tokenType;
         public final String pattern;
-        public Asdf(String tokenType, String pattern)
+        public TokenTypeAndPattern(String tokenType, String pattern)
         {
             this.tokenType = tokenType;
             this.pattern = pattern;
@@ -26,24 +27,27 @@ public class Tokenizer
     public static final String SPACE = "SPACE";
     public static final String COMMENT = "COMMENT";
     public static final String INVALID = "INVALID";
-    private static final List<Asdf> asdfs = Arrays.asList( //
-            new Asdf(IDENTIFIER, "[A-Za-z_][A-Za-z_0-9]*"), //
-            new Asdf(NUMBER, "[0-9]+(?:[.][0-9]+)?(:?[Ee][+-]?[0-9]+)?"), //
-            new Asdf(STRING, "\"(:?\\\\[^\n]|[^\"\\\n])*\""), //
-            new Asdf(OPERATOR, "\\{|\\}|\\(|\\)|\\+|-|\\*|/|=|;|,"), //
-            new Asdf(NEWLINE, "\n"), //
-            new Asdf(SPACE, " +"), //
-            new Asdf(COMMENT, "#[^\n]*"), //
-            new Asdf(INVALID, "."));
-
+    private static final List<TokenTypeAndPattern> tokenTypesAndPatterns = Arrays.asList( //
+            new TokenTypeAndPattern(IDENTIFIER, "[A-Za-z_][A-Za-z_0-9]*"), //
+            new TokenTypeAndPattern(NUMBER, "[0-9]+(?:[.][0-9]+)?(:?[Ee][+-]?[0-9]+)?"), //
+            new TokenTypeAndPattern(STRING, "\"(:?\\\\[^\n]|[^\"\\\n])*\""), //
+            new TokenTypeAndPattern(OPERATOR, "\\{|\\}|\\(|\\)|\\+|-|\\*|/|=|;|,"), //
+            new TokenTypeAndPattern(NEWLINE, "\n"), //
+            new TokenTypeAndPattern(SPACE, " +"), //
+            new TokenTypeAndPattern(COMMENT, "#[^\n]*"), //
+            new TokenTypeAndPattern(INVALID, "."));
     private static final String grandPattern;
     static {
         ArrayList<String> patternGroups = new ArrayList<>();
-        for (Asdf asdf : asdfs)
-            patternGroups.add("(?<" + asdf.tokenType + ">" + asdf.pattern + ")");
+        for (TokenTypeAndPattern tokenTypeAndPattern : tokenTypesAndPatterns)
+            patternGroups.add("(?<" + tokenTypeAndPattern.tokenType + ">" + tokenTypeAndPattern.pattern + ")");
         grandPattern = Main.join(patternGroups, "|");
     }
     private static final Pattern grandRegex = Pattern.compile(grandPattern);
+    public static final HashSet<String> keywords = new HashSet<>(Arrays.asList( //
+            "def", //
+            "do", //
+            "var"));
 
     private final String string;
     public Tokenizer(String string)
@@ -59,8 +63,6 @@ public class Tokenizer
             matcher.find();
             String tokenText = matcher.group();
             int tokenEnd = matcher.end();
-            if (tokenStart + tokenText.length() != tokenEnd)
-                throw null;
             String tokenType = getTokenType(matcher);
             tokens.add(new Token(tokenType, tokenText, tokenStart, tokenEnd));
             tokenStart = tokenEnd;
@@ -69,9 +71,9 @@ public class Tokenizer
     }
     private String getTokenType(Matcher matcher)
     {
-        for (Asdf asdf : asdfs)
-            if (matcher.group(asdf.tokenType) != null)
-                return asdf.tokenType;
+        for (TokenTypeAndPattern tokenTypeAndPattern : tokenTypesAndPatterns)
+            if (matcher.group(tokenTypeAndPattern.tokenType) != null)
+                return tokenTypeAndPattern.tokenType;
         throw null;
     }
 }
