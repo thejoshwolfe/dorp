@@ -17,7 +17,7 @@ def find(list, item) => {
 };
 
 def pow(b, p) => {
-  var r = 1
+  var r = 1;
   p.times({
     r *= b
   });
@@ -49,7 +49,7 @@ List.@each(block) => {
 var even = numbers.each((n)={if n % 2 is 0 then n else continue});
 
 # control structure; effective implementation;
-continue a; throw Continue(__return_context__, (a));
+continue; throw Continue(__return_context__);
 break a; throw Break(__return_context__, (a));
 return a; throw Return(__return_context__, (a));
 => {...}; {
