@@ -31,7 +31,7 @@ public class Parser
 
     private final HashMap<RuleName, ParserRule> nameToRule = new HashMap<>();
     {
-        nameToRule.put(RuleName.BLOCK_CONTENTS, listWithOptionalElements(NodeType.STATEMENT_LIST, RuleName.STATEMENT, ";"));
+        nameToRule.put(RuleName.BLOCK_CONTENTS, listWithOptionalElements(NodeType.BLOCK_CONTENTS, RuleName.STATEMENT, ";"));
         nameToRule.put(RuleName.STATEMENT, new ParserRule(any(rule(RuleName.DEFINITION), rule(RuleName.EXPRESSION))));
         nameToRule.put(RuleName.DEFINITION, new ParserRule(sequence(operator("def"), rule(RuleName.ASSIGNMENT))) {
             @Override
@@ -450,7 +450,7 @@ public class Parser
         DIVIDED_BY, //
         ARGUMENT_LIST, //
         PARENS, //
-        STATEMENT_LIST, //
+        BLOCK_CONTENTS, //
         EXPRESSION_LIST, //
         BLOCK, //
         NUMBER, //

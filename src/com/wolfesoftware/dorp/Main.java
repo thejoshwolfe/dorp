@@ -15,6 +15,7 @@ public class Main
         String contents = readFile(new File(args[0]));
         List<Token> tokens = new Tokenizer(contents).tokenize();
         SyntaxNode rootNode = new Parser(tokens).parse();
+        new Evaluator(rootNode).evaluate();
         System.out.println(rootNode);
     }
 
