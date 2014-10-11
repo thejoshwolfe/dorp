@@ -42,4 +42,14 @@ public class Main
             result.append(delimiter).append(iterator.next());
         return result.toString();
     }
+
+    /** why is there no Arrays.reverse()? */
+    public static <T> void reverse(T[] array)
+    {
+        for (int low = 0, hi = array.length - 1; low < hi; low++, hi--) {
+            T tmp = array[low];
+            array[low] = array[hi];
+            array[hi] = tmp;
+        }
+    }
 }

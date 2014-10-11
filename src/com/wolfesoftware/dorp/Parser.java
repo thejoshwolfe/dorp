@@ -55,13 +55,32 @@ public class Parser
             }
         });
         // operator precedence
-        nameToRule.put(RuleName.ASSIGNMENT, operatorChain(RuleName.SUM, OperatorDirection.RIGHT_TO_LEFT, //
-                new String[] { "=" }, //
-                new NodeType[] { NodeType.ASSIGNMENT }));
-        nameToRule.put(RuleName.SUM, operatorChain(RuleName.TERM, OperatorDirection.LEFT_TO_RIGHT, //
+        nameToRule.put(RuleName.ASSIGNMENT, new ParserRule(sequence(rule(RuleName.SUM), repeat(sequence(operator("="), rule(RuleName.SUM))))) {
+            @Override
+            public SyntaxNode postProcess(SyntaxNode node)
+            {
+                // sum ( "=" sum )*
+                SyntaxNode[] addendums = node.children[1].children;
+                SyntaxNode[] elements = new SyntaxNode[1 + addendums.length];
+                elements[0] = node.children[0];
+                for (int i = 0; i < addendums.length; i++) {
+                    // "=" sum
+                    elements[i + 1] = addendums[i].children[1];
+                }
+                // right-to-left
+                Main.reverse(elements);
+                SyntaxNode right = elements[0];
+                for (int i = 1; i < elements.length; i++) {
+                    SyntaxNode left = elements[i];
+                    right = new SyntaxNode(left.startTokenIndex, right.endTokenIndex, NodeType.ASSIGNMENT, new SyntaxNode[] { left, right });
+                }
+                return right;
+            }
+        });
+        nameToRule.put(RuleName.SUM, operatorChain(RuleName.TERM, //
                 new String[] { "+", "-" }, //
                 new NodeType[] { NodeType.PLUS, NodeType.MINUS }));
-        nameToRule.put(RuleName.TERM, operatorChain(RuleName.TRAILABLE, OperatorDirection.LEFT_TO_RIGHT, //
+        nameToRule.put(RuleName.TERM, operatorChain(RuleName.TRAILABLE, //
                 new String[] { "*", "/" }, //
                 new NodeType[] { NodeType.TIMES, NodeType.DIVIDED_BY }));
         nameToRule.put(RuleName.TRAILABLE, new ParserRule(sequence(rule(RuleName.ATOM), repeat(rule(RuleName.TRAILER)))) {
@@ -311,11 +330,7 @@ public class Parser
         };
     }
 
-    private enum OperatorDirection
-    {
-        LEFT_TO_RIGHT, RIGHT_TO_LEFT;
-    }
-    private ParserRule operatorChain(RuleName elementRuleName, OperatorDirection direction, final String[] operators, final NodeType[] typeOverrides)
+    private ParserRule operatorChain(RuleName elementRuleName, final String[] operators, final NodeType[] typeOverrides)
     {
         ParserRuleMatcher[] operatorMatchers = new ParserRuleMatcher[operators.length];
         for (int i = 0; i < operators.length; i++)
