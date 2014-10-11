@@ -3,40 +3,86 @@ package com.wolfesoftware.dorp;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map.Entry;
 
 import com.wolfesoftware.dorp.Tokenizer.TokenType;
 
 public class Parser
 {
-    private static enum RuleName
+    private enum RuleName
     {
         BLOCK_CONTENTS, //
         STATEMENT, //
         DEFINITION, //
         EXPRESSION, //
-        ASSIGNMENT;
+        ASSIGNMENT, //
+        DO, //
+        SUM, //
+        TERM, //
+        TRAILABLE, //
+        ATOM, //
+        TRAILER, //
+        PARENS, //
+        EXPRESSION_LIST, //
+        BLOCK, //
+        NUMBER, //
+        IDENTIFIER;
     }
 
     private final HashMap<RuleName, ParserRule> nameToRule = new HashMap<>();
     {
         nameToRule.put(RuleName.BLOCK_CONTENTS, listWithOptionalElements(RuleName.STATEMENT, ";"));
         nameToRule.put(RuleName.STATEMENT, new ParserRule(any(rule(RuleName.DEFINITION), rule(RuleName.EXPRESSION)), null));
-        nameToRule.put(RuleName.DEFINITION, new ParserRule(sequence(token(TokenType.OPERATOR, "def"), rule(RuleName.ASSIGNMENT)), SyntaxNode.DEFINITION));
+        nameToRule.put(RuleName.DEFINITION, new ParserRule(sequence(token(TokenType.OPERATOR, "def"), rule(RuleName.ASSIGNMENT)), NodeType.DEFINITION));
+        nameToRule.put(RuleName.EXPRESSION, new ParserRule(any(rule(RuleName.DO), rule(RuleName.ASSIGNMENT)), null));
+        nameToRule.put(RuleName.DO, new ParserRule(sequence(token(TokenType.OPERATOR, "do"), rule(RuleName.EXPRESSION)), NodeType.CALL));
+        // operator precedence
+        nameToRule.put(RuleName.ASSIGNMENT, operatorChain(RuleName.SUM, OperatorDirection.RIGHT_TO_LEFT, //
+                new String[] { "=" }, //
+                new NodeType[] { NodeType.ASSIGNMENT }));
+        nameToRule.put(RuleName.SUM, operatorChain(RuleName.TERM, OperatorDirection.LEFT_TO_RIGHT, //
+                new String[] { "+", "-" }, //
+                new NodeType[] { NodeType.PLUS, NodeType.MINUS }));
+        nameToRule.put(RuleName.TERM, operatorChain(RuleName.TRAILABLE, OperatorDirection.LEFT_TO_RIGHT, //
+                new String[] { "*", "/" }, //
+                new NodeType[] { NodeType.TIMES, NodeType.DIVIDED_BY }));
+        nameToRule.put(RuleName.TRAILABLE, new ParserRule(sequence(rule(RuleName.ATOM), repeat(rule(RuleName.TRAILER))), null));
+        nameToRule.put(RuleName.TRAILER, new ParserRule(rule(RuleName.PARENS), NodeType.CALL));
+        nameToRule.put(RuleName.EXPRESSION_LIST, listWithOptionalElements(RuleName.EXPRESSION, ","));
+        // terminals and groups
+        nameToRule.put(RuleName.ATOM, new ParserRule(any( //
+                rule(RuleName.BLOCK), //
+                rule(RuleName.PARENS), //
+                rule(RuleName.NUMBER), //
+                rule(RuleName.IDENTIFIER)), null));
+        nameToRule.put(RuleName.PARENS, new ParserRule(sequence(token(TokenType.OPERATOR, "("), rule(RuleName.EXPRESSION_LIST), token(TokenType.OPERATOR, ")")), null));
+        nameToRule.put(RuleName.BLOCK, new ParserRule(sequence(token(TokenType.OPERATOR, "{"), rule(RuleName.BLOCK_CONTENTS), token(TokenType.OPERATOR, "}")), null));
+        nameToRule.put(RuleName.NUMBER, new ParserRule(token(TokenType.NUMBER, null), null));
+        nameToRule.put(RuleName.IDENTIFIER, new ParserRule(token(TokenType.IDENTIFIER, null), null));
     }
 
-    private static class ParserRule
+    private class ParserRule
     {
         public final ParserRuleMatcher matcher;
-        private final String typeOverride;
-        public ParserRule(ParserRuleMatcher matcher, String typeOverride)
+        private final NodeType typeOverride;
+        public ParserRule(ParserRuleMatcher matcher, NodeType typeOverride)
         {
             this.matcher = matcher;
             this.typeOverride = typeOverride;
         }
-        public void postProcess(SyntaxNode node)
+        public SyntaxNode postProcess(SyntaxNode node)
         {
             if (typeOverride != null)
                 node.type = typeOverride;
+            return node;
+        }
+        @Override
+        public String toString()
+        {
+            for (Entry<RuleName, ParserRule> entry : nameToRule.entrySet())
+                if (entry.getValue() == this)
+                    return entry.getKey().name();
+            return super.toString();
         }
     }
 
@@ -62,7 +108,7 @@ public class Parser
                         throw new ParserError();
                     return null;
                 }
-                if (exactText != null && token.text != exactText) {
+                if (exactText != null && !token.text.equals(exactText)) {
                     if (throwFailure)
                         throw new ParserError();
                     return null;
@@ -113,6 +159,10 @@ public class Parser
                 SyntaxNode[] children = new SyntaxNode[subMatchers.length];
                 for (int i = 0; i < subMatchers.length; i++) {
                     children[i] = subMatchers[i].match(tokenIndex, throwFailure);
+                    if (children[i] == null) {
+                        // polite failure of any children is a polite failure of the whole
+                        return null;
+                    }
                     tokenIndex = children[i].endTokenIndex;
                 }
                 return new SyntaxNode(startTokenIndex, tokenIndex, children);
@@ -159,7 +209,7 @@ public class Parser
         ParserRuleMatcher matcher = maybe(sequence(rule(elementTypeName), repeat(sequence(token(TokenType.OPERATOR, separator), maybe(rule(elementTypeName))))));
         return new ParserRule(matcher, null) {
             @Override
-            public void postProcess(SyntaxNode node)
+            public SyntaxNode postProcess(SyntaxNode node)
             {
                 // pull the simple sequence of elements out of the complex pattern
                 ArrayList<SyntaxNode> children = new ArrayList<>();
@@ -185,7 +235,44 @@ public class Parser
                     }
                 }
                 node.children = children.toArray(new SyntaxNode[0]);
-                super.postProcess(node);
+                return super.postProcess(node);
+            }
+        };
+    }
+
+    private enum OperatorDirection
+    {
+        LEFT_TO_RIGHT, RIGHT_TO_LEFT;
+    }
+    private ParserRule operatorChain(RuleName elementRuleName, OperatorDirection direction, final String[] operators, final NodeType[] typeOverrides)
+    {
+        ParserRuleMatcher[] operatorMatchers = new ParserRuleMatcher[operators.length];
+        for (int i = 0; i < operators.length; i++)
+            operatorMatchers[i] = token(TokenType.OPERATOR, operators[i]);
+        ParserRuleMatcher matcher = sequence(rule(elementRuleName), repeat(sequence(any(operatorMatchers), rule(elementRuleName))));
+        return new ParserRule(matcher, null) {
+            @Override
+            public SyntaxNode postProcess(SyntaxNode node)
+            {
+                // from the complex parse tree pattern, extract a binary syntax tree of operations.
+                // a ( [+-] a )*
+                SyntaxNode left = node.children[0];
+                for (SyntaxNode addendum : node.children[1].children) {
+                    // [+-] a
+                    String operatorText = addendum.children[0].getSimpleText();
+                    NodeType operatorType = null;
+                    for (int i = 0; i < operators.length; i++) {
+                        if (operators[i].equals(operatorText)) {
+                            operatorType = typeOverrides[i];
+                            break;
+                        }
+                    }
+                    SyntaxNode right = addendum.children[1];
+                    SyntaxNode operation = new SyntaxNode(left.startTokenIndex, right.endTokenIndex, new SyntaxNode[] { left, right });
+                    operation.type = operatorType;
+                    left = operation;
+                }
+                return left;
             }
         };
     }
@@ -210,7 +297,56 @@ public class Parser
         ParserRule rule = nameToRule.get(ruleName);
         SyntaxNode node = rule.matcher.match(tokenIndex, throwFailure);
         if (node != null)
-            rule.postProcess(node);
+            node = rule.postProcess(node);
         return node;
+    }
+
+    public enum NodeType
+    {
+        /** this value should always be replaced in a {@link ParserRule#postProcess(SyntaxNode)} */
+        PARSER_INTERMEDIATE, //
+        DEFINITION, //
+        CALL, //
+        ASSIGNMENT, //
+        PLUS, //
+        MINUS, //
+        TIMES, //
+        DIVIDED_BY;
+    }
+
+    public class SyntaxNode
+    {
+        public final int startTokenIndex;
+        public final int endTokenIndex;
+        public SyntaxNode[] children;
+        public NodeType type = NodeType.PARSER_INTERMEDIATE;
+        public SyntaxNode(int startTokenIndex, int endTokenIndex)
+        {
+            this(startTokenIndex, endTokenIndex, null);
+        }
+        public SyntaxNode(int startTokenIndex, int endTokenIndex, SyntaxNode[] children)
+        {
+            this.startTokenIndex = startTokenIndex;
+            this.endTokenIndex = endTokenIndex;
+            this.children = children;
+        }
+        public String getSimpleText()
+        {
+            if (startTokenIndex + 1 == endTokenIndex)
+                return tokens.get(startTokenIndex).text;
+            return null;
+        }
+        @Override
+        public String toString()
+        {
+            if (children == null)
+                return getSimpleText();
+            StringBuilder result = new StringBuilder();
+            result.append("[").append(type.name());
+            for (SyntaxNode child : children)
+                result.append(" ").append(child.toString());
+            result.append("]");
+            return result.toString();
+        }
     }
 }

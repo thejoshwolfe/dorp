@@ -20,7 +20,7 @@ public class Tokenizer
         }
     }
 
-    public static enum TokenType
+    public enum TokenType
     {
         IDENTIFIER, //
         NUMBER, //
