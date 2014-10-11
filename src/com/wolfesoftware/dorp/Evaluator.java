@@ -1,5 +1,6 @@
 package com.wolfesoftware.dorp;
 
+import java.io.PrintStream;
 import java.math.BigInteger;
 import java.util.HashMap;
 
@@ -9,11 +10,17 @@ import com.wolfesoftware.dorp.Parser.SyntaxNode;
 
 public class Evaluator
 {
+    public static class ExecutionOptions
+    {
+        public PrintStream stdout = System.out;
+    }
     private final SyntaxNode rootNode;
     private final ExecutionContext globalContext;
-    public Evaluator(SyntaxNode rootNode)
+    private final ExecutionOptions options;
+    public Evaluator(SyntaxNode rootNode, ExecutionOptions options)
     {
         this.rootNode = rootNode;
+        this.options = options;
         this.globalContext = makeGlobalContext();
     }
     public void evaluate()
@@ -137,7 +144,7 @@ public class Evaluator
             public Value run(Value[] arguments)
             {
                 Value theValue = arguments[0];
-                System.out.println((BigInteger)((PrimitiveValue)theValue).value);
+                options.stdout.println((BigInteger)((PrimitiveValue)theValue).value);
                 return voidValue;
             }
         });
