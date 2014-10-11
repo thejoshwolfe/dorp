@@ -1,12 +1,14 @@
 package com.wolfesoftware.dorp;
 
+import com.wolfesoftware.dorp.Tokenizer.TokenType;
+
 public class Token
 {
-    public final String type;
+    public final TokenType type;
     public final String text;
     public final int start;
     public final int end;
-    public Token(String type, String text, int start, int end)
+    public Token(TokenType type, String text, int start, int end)
     {
         this.type = type;
         this.text = text;

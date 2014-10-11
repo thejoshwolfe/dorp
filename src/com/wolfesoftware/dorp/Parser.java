@@ -4,19 +4,24 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
+import com.wolfesoftware.dorp.Tokenizer.TokenType;
+
 public class Parser
 {
-    private static final String BLOCK_CONTENTS = "BLOCK_CONTENTS";
-    private static final String STATEMENT = "STATEMENT";
-    private static final String DEFINITION = "DEFINITION";
-    private static final String EXPRESSION = "EXPRESSION";
-    private static final String ASSIGNMENT = "ASSIGNMENT";
-
-    private final HashMap<String, ParserRule> nameToRule = new HashMap<>();
+    private static enum RuleName
     {
-        nameToRule.put(BLOCK_CONTENTS, listWithOptionalElements(STATEMENT, ";"));
-        nameToRule.put(STATEMENT, new ParserRule(any(rule(DEFINITION), rule(EXPRESSION)), null));
-        nameToRule.put(DEFINITION, new ParserRule(sequence(token(Tokenizer.IDENTIFIER, "def"), rule(ASSIGNMENT)), SyntaxNode.DEFINITION));
+        BLOCK_CONTENTS, //
+        STATEMENT, //
+        DEFINITION, //
+        EXPRESSION, //
+        ASSIGNMENT;
+    }
+
+    private final HashMap<RuleName, ParserRule> nameToRule = new HashMap<>();
+    {
+        nameToRule.put(RuleName.BLOCK_CONTENTS, listWithOptionalElements(RuleName.STATEMENT, ";"));
+        nameToRule.put(RuleName.STATEMENT, new ParserRule(any(rule(RuleName.DEFINITION), rule(RuleName.EXPRESSION)), null));
+        nameToRule.put(RuleName.DEFINITION, new ParserRule(sequence(token(TokenType.OPERATOR, "def"), rule(RuleName.ASSIGNMENT)), SyntaxNode.DEFINITION));
     }
 
     private static class ParserRule
@@ -40,7 +45,7 @@ public class Parser
         public abstract SyntaxNode match(int tokenIndex, boolean throwFailure);
     }
     /** leaf pattern that matches a single token */
-    private ParserRuleMatcher token(final String tokenType, final String exactText)
+    private ParserRuleMatcher token(final TokenType tokenType, final String exactText)
     {
         return new ParserRuleMatcher() {
             @Override
@@ -67,7 +72,7 @@ public class Parser
         };
     }
     /** a matcher (as part of a rule) that matches another rule */
-    private ParserRuleMatcher rule(final String ruleName)
+    private ParserRuleMatcher rule(final RuleName ruleName)
     {
         return new ParserRuleMatcher() {
             @Override
@@ -148,10 +153,10 @@ public class Parser
         };
     }
 
-    private ParserRule listWithOptionalElements(String elementTypeName, String separator)
+    private ParserRule listWithOptionalElements(RuleName elementTypeName, String separator)
     {
         // allow empty lists, missing elements, and trailing separators
-        ParserRuleMatcher matcher = maybe(sequence(rule(elementTypeName), repeat(sequence(token(Tokenizer.OPERATOR, separator), maybe(rule(elementTypeName))))));
+        ParserRuleMatcher matcher = maybe(sequence(rule(elementTypeName), repeat(sequence(token(TokenType.OPERATOR, separator), maybe(rule(elementTypeName))))));
         return new ParserRule(matcher, null) {
             @Override
             public void postProcess(SyntaxNode node)
@@ -197,10 +202,10 @@ public class Parser
 
     public SyntaxNode parse()
     {
-        return parseNode(BLOCK_CONTENTS, 0, true);
+        return parseNode(RuleName.BLOCK_CONTENTS, 0, true);
     }
 
-    private SyntaxNode parseNode(String ruleName, int tokenIndex, boolean throwFailure)
+    private SyntaxNode parseNode(RuleName ruleName, int tokenIndex, boolean throwFailure)
     {
         ParserRule rule = nameToRule.get(ruleName);
         SyntaxNode node = rule.matcher.match(tokenIndex, throwFailure);
