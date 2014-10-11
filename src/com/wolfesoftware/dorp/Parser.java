@@ -72,6 +72,35 @@ public class Parser
                 SyntaxNode right = elements[0];
                 for (int i = 1; i < elements.length; i++) {
                     SyntaxNode left = elements[i];
+                    // some assignment constructs are really function declarations
+                    switch (left.type) {
+                        case PARENS: {
+                            // (a, b) = {} becomes {}
+                            SyntaxNode argumentList = left.children[0];
+                            if (right.type != NodeType.BLOCK)
+                                throw new ParserError();
+                            BlockNode block = (BlockNode)right;
+                            if (block.argumentDeclarations != null)
+                                throw new ParserError();
+                            block.argumentDeclarations = argumentList;
+                            // no real assignment here
+                            right = block;
+                            continue;
+                        }
+                        case CALL: {
+                            // f(a, b) = {} becomes f = {}
+                            SyntaxNode functionName = left.children[0];
+                            SyntaxNode argumentList = left.children[1];
+                            if (right.type != NodeType.BLOCK)
+                                throw new ParserError();
+                            BlockNode block = (BlockNode)right;
+                            if (block.argumentDeclarations != null)
+                                throw new ParserError();
+                            block.argumentDeclarations = argumentList;
+                            left = functionName;
+                            break;
+                        }
+                    }
                     right = new SyntaxNode(left.startTokenIndex, right.endTokenIndex, NodeType.ASSIGNMENT, new SyntaxNode[] { left, right });
                 }
                 return right;
@@ -127,10 +156,7 @@ public class Parser
             @Override
             public SyntaxNode postProcess(SyntaxNode node)
             {
-                // discard "{" and "}" operators
-                node.children = new SyntaxNode[] { node.children[1] };
-                node.type = NodeType.BLOCK;
-                return node;
+                return new BlockNode(node);
             }
         });
         nameToRule.put(RuleName.NUMBER, new ParserRule(token(TokenType.NUMBER)));
@@ -169,13 +195,8 @@ public class Parser
             @Override
             public SyntaxNode match(int tokenIndex, boolean throwFailure)
             {
-                if (tokenIndex >= tokens.size()) {
-                    if (throwFailure)
-                        throw new ParserError();
-                    return null;
-                }
-                Token token = tokens.get(tokenIndex);
-                if (!(token.type == TokenType.OPERATOR && token.text.equals(text))) {
+                tokenIndex = findToken(tokenIndex, TokenType.OPERATOR, text);
+                if (tokenIndex == -1) {
                     if (throwFailure)
                         throw new ParserError();
                     return null;
@@ -191,13 +212,8 @@ public class Parser
             @Override
             public SyntaxNode match(int tokenIndex, boolean throwFailure)
             {
-                if (tokenIndex >= tokens.size()) {
-                    if (throwFailure)
-                        throw new ParserError();
-                    return null;
-                }
-                Token token = tokens.get(tokenIndex);
-                if (token.type != tokenType) {
+                tokenIndex = findToken(tokenIndex, tokenType, null);
+                if (tokenIndex == -1) {
                     if (throwFailure)
                         throw new ParserError();
                     return null;
@@ -205,6 +221,25 @@ public class Parser
                 return new SyntaxNode(tokenIndex, tokenIndex + 1);
             }
         };
+    }
+    private int findToken(int tokenIndex, TokenType tokenType, String exactText)
+    {
+        while (tokenIndex < tokens.size()) {
+            Token token = tokens.get(tokenIndex);
+            switch (token.type) {
+                case SPACE:
+                case NEWLINE:
+                case COMMENT:
+                    tokenIndex += 1;
+                    continue;
+            }
+            if (token.type != tokenType)
+                break;
+            if (exactText != null && !token.text.equals(exactText))
+                break;
+            return tokenIndex;
+        }
+        return -1;
     }
     /** a matcher (as part of a rule) that matches another rule */
     private ParserRuleMatcher rule(final RuleName ruleName)
@@ -447,6 +482,15 @@ public class Parser
                 result.append(" ").append(child.toString());
             result.append("]");
             return result.toString();
+        }
+    }
+
+    public class BlockNode extends SyntaxNode
+    {
+        public SyntaxNode argumentDeclarations = null;
+        public BlockNode(SyntaxNode node)
+        {
+            super(node.startTokenIndex, node.endTokenIndex, NodeType.BLOCK, new SyntaxNode[] { node.children[1] });
         }
     }
 }
