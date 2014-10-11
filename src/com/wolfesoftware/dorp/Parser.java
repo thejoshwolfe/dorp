@@ -82,6 +82,7 @@ public class Parser
                             BlockNode block = (BlockNode)right;
                             if (block.argumentDeclarations != null)
                                 throw new ParserError();
+                            argumentList.type = NodeType.ARGUMENT_LIST;
                             block.argumentDeclarations = argumentList;
                             // no real assignment here
                             right = block;
@@ -159,8 +160,22 @@ public class Parser
                 return new BlockNode(node);
             }
         });
-        nameToRule.put(RuleName.NUMBER, new ParserRule(token(TokenType.NUMBER)));
-        nameToRule.put(RuleName.IDENTIFIER, new ParserRule(token(TokenType.IDENTIFIER)));
+        nameToRule.put(RuleName.NUMBER, new ParserRule(token(TokenType.NUMBER)) {
+            @Override
+            public SyntaxNode postProcess(SyntaxNode node)
+            {
+                node.type = NodeType.NUMBER;
+                return node;
+            }
+        });
+        nameToRule.put(RuleName.IDENTIFIER, new ParserRule(token(TokenType.IDENTIFIER)) {
+            @Override
+            public SyntaxNode postProcess(SyntaxNode node)
+            {
+                node.type = NodeType.IDENTIFIER;
+                return node;
+            }
+        });
     }
 
     private class ParserRule
@@ -437,7 +452,9 @@ public class Parser
         PARENS, //
         STATEMENT_LIST, //
         EXPRESSION_LIST, //
-        BLOCK;
+        BLOCK, //
+        NUMBER, //
+        IDENTIFIER;
     }
 
     public class SyntaxNode
@@ -470,19 +487,41 @@ public class Parser
         @Override
         public String toString()
         {
-            if (children == null) {
-                String simpleText = getSimpleText();
-                if (simpleText == null)
-                    return "";
-                return '"' + simpleText + '"';
-            }
             StringBuilder result = new StringBuilder();
-            result.append("[").append(type.name());
-            for (SyntaxNode child : children)
-                result.append(" ").append(child.toString());
-            result.append("]");
+            writeNodeToBuffer(result, this, 0);
             return result.toString();
         }
+    }
+
+    private static void writeNodeToBuffer(StringBuilder builder, SyntaxNode node, int indentation)
+    {
+        builder.append("[").append(node.type.name());
+        if (node.children == null) {
+            String simpleText = node.getSimpleText();
+            if (simpleText != null) {
+                builder.append(" \"").append(simpleText).append('"');
+            }
+        } else {
+            if (node.type == NodeType.BLOCK) {
+                builder.append("\n");
+                for (int i = 0; i < indentation + 1; i++)
+                    builder.append("  ");
+                SyntaxNode argumentDeclarations = ((BlockNode)node).argumentDeclarations;
+                writeNodeToBuffer(builder, argumentDeclarations, indentation + 1);
+            }
+            for (SyntaxNode child : node.children) {
+                builder.append("\n");
+                for (int i = 0; i < indentation + 1; i++)
+                    builder.append("  ");
+                writeNodeToBuffer(builder, child, indentation + 1);
+            }
+            if (node.children.length > 0) {
+                builder.append("\n");
+                for (int i = 0; i < indentation; i++)
+                    builder.append("  ");
+            }
+        }
+        builder.append("]");
     }
 
     public class BlockNode extends SyntaxNode
