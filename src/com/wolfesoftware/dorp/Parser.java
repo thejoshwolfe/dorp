@@ -78,10 +78,10 @@ public class Parser
                             // (a, b) = {} becomes {}
                             SyntaxNode argumentList = left.children[0];
                             if (right.type != NodeType.BLOCK)
-                                throw new ParserError();
+                                throw new ParserError(argumentList.endTokenIndex);
                             BlockNode block = (BlockNode)right;
                             if (block.argumentDeclarations != null)
-                                throw new ParserError();
+                                throw new ParserError(argumentList.endTokenIndex);
                             argumentList.type = NodeType.ARGUMENT_LIST;
                             block.argumentDeclarations = argumentList;
                             // no real assignment here
@@ -93,10 +93,10 @@ public class Parser
                             SyntaxNode functionName = left.children[0];
                             SyntaxNode argumentList = left.children[1];
                             if (right.type != NodeType.BLOCK)
-                                throw new ParserError();
+                                throw new ParserError(argumentList.endTokenIndex);
                             BlockNode block = (BlockNode)right;
                             if (block.argumentDeclarations != null)
-                                throw new ParserError();
+                                throw new ParserError(argumentList.endTokenIndex);
                             block.argumentDeclarations = argumentList;
                             left = functionName;
                             break;
@@ -213,7 +213,7 @@ public class Parser
                 tokenIndex = findToken(tokenIndex, TokenType.OPERATOR, text);
                 if (tokenIndex == -1) {
                     if (throwFailure)
-                        throw new ParserError();
+                        throw new ParserError(tokenIndex);
                     return null;
                 }
                 return new SyntaxNode(tokenIndex, tokenIndex + 1);
@@ -230,7 +230,7 @@ public class Parser
                 tokenIndex = findToken(tokenIndex, tokenType, null);
                 if (tokenIndex == -1) {
                     if (throwFailure)
-                        throw new ParserError();
+                        throw new ParserError(tokenIndex);
                     return null;
                 }
                 return new SyntaxNode(tokenIndex, tokenIndex + 1);
@@ -240,6 +240,8 @@ public class Parser
     private int findToken(int tokenIndex, TokenType tokenType, String exactText)
     {
         while (tokenIndex < tokens.size()) {
+            if (tokenIndexHighWaterMark < tokenIndex)
+                tokenIndexHighWaterMark = tokenIndex;
             Token token = tokens.get(tokenIndex);
             switch (token.type) {
                 case SPACE:
@@ -324,7 +326,7 @@ public class Parser
         };
     }
     /** like regex a|b|c */
-    private static ParserRuleMatcher any(final ParserRuleMatcher... subMatchers)
+    private ParserRuleMatcher any(final ParserRuleMatcher... subMatchers)
     {
         return new ParserRuleMatcher() {
             @Override
@@ -336,7 +338,7 @@ public class Parser
                         return result;
                 }
                 if (throwFailure)
-                    throw new ParserError();
+                    throw new ParserError(tokenIndex);
                 return null;
             }
         };
@@ -413,11 +415,16 @@ public class Parser
         };
     }
 
-    public static class ParserError extends RuntimeException
+    public class ParserError extends RuntimeException
     {
+        public ParserError(int tokenIndex)
+        {
+            super(tokenIndex < tokens.size() ? tokens.get(tokenIndex).text : "EOF");
+        }
     }
 
     private final List<Token> tokens;
+    private int tokenIndexHighWaterMark = 0;
     public Parser(List<Token> tokens)
     {
         this.tokens = tokens;
@@ -425,7 +432,10 @@ public class Parser
 
     public SyntaxNode parse()
     {
-        return parseNode(RuleName.BLOCK_CONTENTS, 0, true);
+        SyntaxNode rootNode = parseNode(RuleName.BLOCK_CONTENTS, 0, true);
+        if (rootNode.endTokenIndex != tokens.size())
+            throw new ParserError(tokenIndexHighWaterMark);
+        return rootNode;
     }
 
     private SyntaxNode parseNode(RuleName ruleName, int tokenIndex, boolean throwFailure)

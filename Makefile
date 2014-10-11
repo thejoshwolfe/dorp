@@ -4,7 +4,7 @@ SHELL = bash
 .PHONY: build test clean
 build:
 	@mkdir -p bin
-	javac -d bin -cp src src/com/wolfesoftware/dorp/{Main,Test}.java
+	javac -g -d bin -cp src src/com/wolfesoftware/dorp/{Main,Test}.java
 	@echo -e '#!/bin/bash\njava -cp "$$(dirname "$$0")"/bin com.wolfesoftware.dorp.Main "$$@"' > dorp
 	@chmod +x dorp
 
