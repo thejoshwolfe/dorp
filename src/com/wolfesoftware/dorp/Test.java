@@ -28,9 +28,9 @@ public class Test
             options.stdout = new PrintStream(outputBuffer);
             Main.execute(contents, options);
             String output = new String(outputBuffer.toByteArray());
-            ArrayList<String> actualLines = new ArrayList<>(Arrays.asList(output.split("\n")));
-            // final blank line doesn't count
-            actualLines.remove(actualLines.size() - 1);
+            ArrayList<String> actualLines = new ArrayList<>();
+            if (!output.equals(""))
+                actualLines.addAll(Arrays.asList(output.split("\n")));
             if (expectedLines.equals(actualLines)) {
                 System.out.print(".");
             } else {

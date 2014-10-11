@@ -83,7 +83,7 @@ public class Evaluator
             case BLOCK: {
                 // define a function bound to a context
                 SyntaxNode argumentDeclarations = ((BlockNode)node).argumentDeclarations;
-                String[] argumentIds = new String[argumentDeclarations.children.length];
+                String[] argumentIds = new String[argumentDeclarations != null ? argumentDeclarations.children.length : 0];
                 for (int i = 0; i < argumentIds.length; i++) {
                     SyntaxNode argumentNode = argumentDeclarations.children[i];
                     if (argumentNode.type != NodeType.IDENTIFIER)
@@ -144,7 +144,7 @@ public class Evaluator
             public Value run(Value[] arguments)
             {
                 Value theValue = arguments[0];
-                options.stdout.println((BigInteger)((PrimitiveValue)theValue).value);
+                options.stdout.println(((PrimitiveValue)theValue).value);
                 return voidValue;
             }
         });
