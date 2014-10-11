@@ -87,9 +87,9 @@ public class Evaluator
                 return new BlockFunction(signature, argumentIds, node.children[0], context);
             }
             case PARENS: {
-                if (node.children.length != 1)
+                if (node.children[0].children.length != 1)
                     throw new EvaluationException();
-                return evaluate(node.children[0], context);
+                return evaluate(node.children[0].children[0], context);
             }
             case NUMBER:
                 return new PrimitiveValue(integerType, new BigInteger(node.getSimpleText()));

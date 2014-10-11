@@ -16,7 +16,6 @@ public class Main
         List<Token> tokens = new Tokenizer(contents).tokenize();
         SyntaxNode rootNode = new Parser(tokens).parse();
         new Evaluator(rootNode).evaluate();
-        System.out.println(rootNode);
     }
 
     private static String readFile(File file) throws IOException
