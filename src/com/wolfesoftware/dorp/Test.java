@@ -13,6 +13,7 @@ public class Test
 {
     public static void main(String[] args) throws IOException
     {
+        ArrayList<String> failureMessages = new ArrayList<>();
         for (File testFile : Main.sorted(new File("test/").listFiles())) {
             ArrayList<String> expectedLines = new ArrayList<>();
             String contents = Main.readFile(testFile);
@@ -34,11 +35,14 @@ public class Test
             if (expectedLines.equals(actualLines)) {
                 System.out.print(".");
             } else {
-                System.out.println();
-                System.out.println("FAIL: " + testFile.getPath());
-                System.out.println("expected lines: " + expectedLines);
-                System.out.println("actual lines  : " + actualLines);
+                System.out.print("X");
+                failureMessages.add("" + //
+                        "FAIL: " + testFile.getPath() + "\n" + //
+                        "expected lines: " + expectedLines + "\n" + //
+                        "actual lines  : " + actualLines);
             }
         }
+        System.out.println();
+        System.out.println(Main.join(failureMessages, "\n"));
     }
 }
