@@ -24,7 +24,7 @@ public class Main
     public static void execute(String contents, ExecutionOptions options)
     {
         List<Token> tokens = new Tokenizer(contents).tokenize();
-        SyntaxNode rootNode = new Parser(tokens).parse();
+        SyntaxNode rootNode = new Parser(contents, tokens).parse();
         new Evaluator(rootNode, options).evaluate();
     }
 

@@ -45,7 +45,8 @@ public class Evaluator
                         result = evaluate(statment, context);
                 return result;
             }
-            case DEFINITION: {
+            case DEFINITION:
+            case VARIABLE_DECLARATION: {
                 SyntaxNode assignment = node.children[0];
                 SyntaxNode target = assignment.children[0];
                 if (target.type != NodeType.IDENTIFIER)

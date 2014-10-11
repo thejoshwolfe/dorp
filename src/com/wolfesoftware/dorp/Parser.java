@@ -26,13 +26,14 @@ public class Parser
         EXPRESSION_LIST, //
         BLOCK, //
         NUMBER, //
-        IDENTIFIER;
+        IDENTIFIER, //
+        VARIABLE_DECLARATION;
     }
 
     private final HashMap<RuleName, ParserRule> nameToRule = new HashMap<>();
     {
         nameToRule.put(RuleName.BLOCK_CONTENTS, listWithOptionalElements(NodeType.BLOCK_CONTENTS, RuleName.STATEMENT, ";"));
-        nameToRule.put(RuleName.STATEMENT, new ParserRule(any(rule(RuleName.DEFINITION), rule(RuleName.EXPRESSION))));
+        nameToRule.put(RuleName.STATEMENT, new ParserRule(any(rule(RuleName.DEFINITION), rule(RuleName.VARIABLE_DECLARATION), rule(RuleName.EXPRESSION))));
         nameToRule.put(RuleName.DEFINITION, new ParserRule(sequence(operator("def"), rule(RuleName.ASSIGNMENT))) {
             @Override
             public SyntaxNode postProcess(SyntaxNode node)
@@ -40,6 +41,16 @@ public class Parser
                 // discard the "def" operator
                 node.children = new SyntaxNode[] { node.children[1] };
                 node.type = NodeType.DEFINITION;
+                return node;
+            }
+        });
+        nameToRule.put(RuleName.VARIABLE_DECLARATION, new ParserRule(sequence(operator("var"), rule(RuleName.ASSIGNMENT))) {
+            @Override
+            public SyntaxNode postProcess(SyntaxNode node)
+            {
+                // discard the "var" operator
+                node.children = new SyntaxNode[] { node.children[1] };
+                node.type = NodeType.VARIABLE_DECLARATION;
                 return node;
             }
         });
@@ -419,21 +430,54 @@ public class Parser
     {
         public ParserError(int tokenIndex)
         {
-            super(tokenIndex < tokens.size() ? tokens.get(tokenIndex).text : "EOF");
+            super(messageForTokenIndex(tokenIndex));
         }
     }
 
+    private final String contents;
     private final List<Token> tokens;
     private int tokenIndexHighWaterMark = 0;
-    public Parser(List<Token> tokens)
+    public Parser(String contents, List<Token> tokens)
     {
+        this.contents = contents;
         this.tokens = tokens;
     }
 
+    private String messageForTokenIndex(int tokenIndex)
+    {
+        int lineNumber = 1;
+        int lineStartOffset = 0;
+        int lineEndOffset = 0;
+        int offsetIntoLine = -1;
+        for (int i = 0; i < tokens.size(); i++) {
+            Token token = tokens.get(i);
+            if (token.type == TokenType.NEWLINE) {
+                if (offsetIntoLine != -1) {
+                    lineEndOffset = token.start;
+                    break;
+                }
+                lineNumber += 1;
+                lineStartOffset = token.end;
+            }
+            if (i == tokenIndex) {
+                offsetIntoLine = token.start - lineStartOffset;
+            }
+        }
+        if (offsetIntoLine == -1) {
+            return "Unexpected EOF";
+        }
+        StringBuilder result = new StringBuilder();
+        result.append("on line ").append(lineNumber).append('\n');
+        result.append(contents.substring(lineStartOffset, lineEndOffset)).append("\n");
+        for (int i = 0; i < offsetIntoLine; i++)
+            result.append(' ');
+        result.append('^');
+        return result.toString();
+    }
     public SyntaxNode parse()
     {
         SyntaxNode rootNode = parseNode(RuleName.BLOCK_CONTENTS, 0, true);
-        if (rootNode.endTokenIndex != tokens.size())
+        if (tokenIndexHighWaterMark < tokens.size() - 1)
             throw new ParserError(tokenIndexHighWaterMark);
         return rootNode;
     }
@@ -464,7 +508,8 @@ public class Parser
         EXPRESSION_LIST, //
         BLOCK, //
         NUMBER, //
-        IDENTIFIER;
+        IDENTIFIER, //
+        VARIABLE_DECLARATION;
     }
 
     public class SyntaxNode
