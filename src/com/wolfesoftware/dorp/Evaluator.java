@@ -1,7 +1,6 @@
 package com.wolfesoftware.dorp;
 
 import java.io.PrintStream;
-import java.math.BigInteger;
 import java.util.HashMap;
 
 import com.wolfesoftware.dorp.Parser.BlockNode;
@@ -25,7 +24,8 @@ public class Evaluator
     }
     public void evaluate()
     {
-        evaluate(rootNode, new ExecutionContext(globalContext));
+        ExecutionContext moduleContext = new ExecutionContext(globalContext);
+        evaluate(rootNode, moduleContext);
     }
 
     private Value evaluate(SyntaxNode node, ExecutionContext context)
@@ -100,14 +100,31 @@ public class Evaluator
                 return evaluate(node.children[0].children[0], context);
             }
             case NUMBER:
-                return new PrimitiveValue(integerType, new BigInteger(node.getSimpleText()));
+                return new PrimitiveValue(numberType, Double.parseDouble(node.getSimpleText()));
             case IDENTIFIER:
                 return context.lookupSymbol(node.getSimpleText()).value;
             case PLUS:
             case MINUS:
             case TIMES:
-            case DIVIDED_BY:
-                throw null; // TODO
+            case DIVIDED_BY: {
+                Value left = evaluate(node.children[0], context);
+                Value right = evaluate(node.children[1], context);
+                if (!(left.type == numberType && right.type == numberType))
+                    throw new EvaluationException();
+                double leftValue = (Double)((PrimitiveValue)left).value;
+                double rightValue = (Double)((PrimitiveValue)right).value;
+                switch (node.type) {
+                    case PLUS:
+                        return new PrimitiveValue(numberType, leftValue + rightValue);
+                    case MINUS:
+                        return new PrimitiveValue(numberType, leftValue - rightValue);
+                    case TIMES:
+                        return new PrimitiveValue(numberType, leftValue * rightValue);
+                    case DIVIDED_BY:
+                        return new PrimitiveValue(numberType, leftValue / rightValue);
+                }
+                throw null;
+            }
             default:
                 throw null;
         }
@@ -140,12 +157,19 @@ public class Evaluator
         context.define("Null", nullType);
         context.define("null", nullValue);
 
-        context.define("print", new FunctionValue(new FunctionType(voidType, integerType)) {
+        context.define("print", new FunctionValue(new FunctionType(voidType, numberType)) {
             @Override
             public Value run(Value[] arguments)
             {
                 Value theValue = arguments[0];
-                options.stdout.println(((PrimitiveValue)theValue).value);
+                Object value = ((PrimitiveValue)theValue).value;
+                String string = String.valueOf(value);
+                if (value instanceof Double) {
+                    // the .0 is dumb
+                    if (string.endsWith(".0"))
+                        string = string.substring(0, string.length() - ".0".length());
+                }
+                options.stdout.println(string);
                 return voidValue;
             }
         });
@@ -265,7 +289,7 @@ public class Evaluator
         // typoef(Object) == Type
         objectType.type = typeType;
     }
-    private final RuntimeType integerType = new RuntimeType(objectType);
+    private final RuntimeType numberType = new RuntimeType(objectType);
     private final RuntimeType voidType = new RuntimeType(objectType);
     private final Value voidValue = new Value(voidType);
     private final RuntimeType nullType = new RuntimeType(objectType);
@@ -279,6 +303,11 @@ public class Evaluator
         {
             super(type);
             this.value = value;
+        }
+        @Override
+        public String toString()
+        {
+            return String.valueOf(value);
         }
     }
 
