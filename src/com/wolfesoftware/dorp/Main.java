@@ -2,43 +2,87 @@ package com.wolfesoftware.dorp;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 
-import com.wolfesoftware.dorp.Evaluator.ExecutionOptions;
 import com.wolfesoftware.dorp.Parser.SyntaxNode;
 
 public class Main
 {
     public static void main(String[] args) throws IOException
     {
-        String contents = readFile(new File(args[0]));
-        ExecutionOptions options = new ExecutionOptions();
-        execute(contents, options);
+        String sourcePath = null;
+        String outputPath = null;
+        for (int i = 0; i < args.length; i++) {
+            if (args[i].startsWith("-") && !args[i].equals("-")) {
+                switch (args[i]) {
+                    case "-o":
+                    case "--output":
+                        i++;
+                        outputPath = args[i];
+                        break;
+                    default:
+                        throw new RuntimeException("wtf");
+                }
+            } else {
+                if (sourcePath != null)
+                    throw new RuntimeException("too many source files");
+                sourcePath = args[i];
+            }
+        }
+        if (sourcePath == null)
+            throw new RuntimeException("no source files");
+        if (outputPath == null)
+            outputPath = "-";
+
+        String moduleName = "asdf";
+        String outputContents;
+        {
+            String contents = readPath(sourcePath);
+            List<Token> tokens = new Tokenizer(contents).tokenize();
+            SyntaxNode rootNode = new Parser(contents, tokens).parse();
+            outputContents = new CodeGenerator(rootNode, moduleName).generate();
+        }
+        writePath(outputPath, outputContents);
     }
 
-    public static void execute(String contents, ExecutionOptions options)
+    private static void writePath(String path, String contents) throws IOException
     {
-        List<Token> tokens = new Tokenizer(contents).tokenize();
-        SyntaxNode rootNode = new Parser(contents, tokens).parse();
-        new Evaluator(rootNode, options).evaluate();
+        try (OutputStream output = openOutputPath(path)) {
+            output.write(contents.getBytes());
+        }
     }
 
-    public static String readFile(File file) throws IOException
+    private static OutputStream openOutputPath(String path) throws IOException
     {
-        try (FileInputStream stream = new FileInputStream(file)) {
+        if (path.equals("-"))
+            return System.out;
+        return new FileOutputStream(new File(path));
+    }
+
+    public static String readPath(String path) throws IOException
+    {
+        try (InputStream input = openInputPath(path)) {
             StringBuilder result = new StringBuilder();
             byte[] buffer = new byte[0x1000];
             int count;
-            while ((count = stream.read(buffer)) != -1) {
+            while ((count = input.read(buffer)) != -1)
                 result.append(new String(buffer, 0, count));
-            }
             return result.toString();
         }
+    }
+    private static InputStream openInputPath(String path) throws IOException
+    {
+        if (path.equals("-"))
+            return System.in;
+        return new FileInputStream(new File(path));
     }
 
     public static String join(Iterable<?> iterable, String delimiter)
