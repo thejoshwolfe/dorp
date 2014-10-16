@@ -19,8 +19,16 @@ def main():
   except OSError: sys.exit("ERROR: gcc not found. is gcc installed?")
 
   tmp_dir = "test-tmp"
+  if os.path.exists(tmp_dir):
+    shutil.rmdir(tmp_dir)
+  os.makedirs(tmp_dir)
+
+  runtime_lib = os.path.join(tmp_dir, "main.s")
+  subprocess.Popen([assembler, "lib/main.ll", "-o", runtime_lib])
+
   tests = os.listdir("test")
   print("tests: " + " ".join(tests))
+  failures = []
   for test in tests:
     test_path = os.path.join("test", test)
     assembly_file = os.path.join(tmp_dir, test + ".ll")
@@ -30,7 +38,7 @@ def main():
     subprocess.check_call([assembler, assembly_file, "-S", "-o", object_file])
 
     executable = os.path.join(tmp_dir, test + ".exe")
-    subprocess.check_call([linker, object_file, "-o", executable])
+    subprocess.check_call([linker, runtime_lib, object_file, "-o", executable])
 
     test_output = subprocess.check_output([executable])
     expected_output = "".join(line + "\n" for line in re.findall("# (.*)", open(test_path).read()))
@@ -42,6 +50,8 @@ def main():
     else:
       sys.stdout.write(".")
     sys.stdout.flush()
+  for failure in failures:
+    sys.exit("\n".join(failure))
 
 if __name__ == "__main__":
   main()
