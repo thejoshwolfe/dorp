@@ -4,6 +4,7 @@ import os
 import sys
 import subprocess
 import re
+import shutil
 
 def main():
   compiler = "./dorp"
@@ -20,13 +21,15 @@ def main():
 
   tmp_dir = "test-tmp"
   if os.path.exists(tmp_dir):
-    shutil.rmdir(tmp_dir)
+    shutil.rmtree(tmp_dir)
   os.makedirs(tmp_dir)
 
   runtime_lib = os.path.join(tmp_dir, "main.s")
   subprocess.Popen([assembler, "lib/main.ll", "-o", runtime_lib])
 
   tests = os.listdir("test")
+  if sys.argv[1:]:
+    tests = [test for test in tests if test in sys.argv[1:]]
   print("tests: " + " ".join(tests))
   failures = []
   for test in tests:
@@ -35,7 +38,7 @@ def main():
     subprocess.check_call([compiler, test_path, "-o", assembly_file])
 
     object_file = os.path.join(tmp_dir, test + ".s")
-    subprocess.check_call([assembler, assembly_file, "-S", "-o", object_file])
+    subprocess.check_call([assembler, assembly_file, "-o", object_file])
 
     executable = os.path.join(tmp_dir, test + ".exe")
     subprocess.check_call([linker, runtime_lib, object_file, "-o", executable])
@@ -50,8 +53,9 @@ def main():
     else:
       sys.stdout.write(".")
     sys.stdout.flush()
-  for failure in failures:
-    sys.exit("\n".join(failure))
+  sys.stdout.write("\n")
+  if len(failures) > 0:
+    sys.exit("\n".join(failures))
 
 if __name__ == "__main__":
   main()

@@ -16,7 +16,7 @@ public class CodeGenerator
     public String generate()
     {
         generateFunction(moduleName, rootNode);
-        result.append("@entry_point = alias void() @").append(moduleName).append("\n");
+        result.append("@entry_point = alias void()* @").append(moduleName).append("\n");
         return result.toString();
     }
     private void generateFunction(String functionName, SyntaxNode contentsNode)
