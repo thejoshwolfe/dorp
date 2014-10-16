@@ -7,9 +7,9 @@ import re
 import shutil
 
 def main():
-  compiler = "./dorp"
-  if not os.path.exists(compiler):
-    sys.exit("ERROR: Compiler not found. did you run make?")
+  compile_cmd = ["java", "-cp", "bin", "com.wolfesoftware.dorp.Main"]
+  if not os.path.exists("bin"):
+    sys.exit("ERROR: bin/ not found. did you run make?")
 
   assembler = "llc"
   try: subprocess.Popen([assembler, "-help"], stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
@@ -35,7 +35,7 @@ def main():
   for test in tests:
     test_path = os.path.join("test", test)
     assembly_file = os.path.join(tmp_dir, test + ".ll")
-    subprocess.check_call([compiler, test_path, "-o", assembly_file])
+    subprocess.check_call(compile_cmd + [test_path, "-o", assembly_file])
 
     object_file = os.path.join(tmp_dir, test + ".s")
     subprocess.check_call([assembler, assembly_file, "-o", object_file])
