@@ -13,6 +13,7 @@ import java.util.Iterator;
 import java.util.List;
 
 import com.wolfesoftware.dorp.Parser.SyntaxNode;
+import com.wolfesoftware.dorp.SemanticAnalyzer.CompilationUnit;
 
 public class Main
 {
@@ -43,13 +44,16 @@ public class Main
             outputPath = "-";
 
         String moduleName = "asdf";
-        String outputContents;
-        {
-            String contents = readPath(sourcePath);
-            List<Token> tokens = new Tokenizer(contents).tokenize();
-            SyntaxNode rootNode = new Parser(contents, tokens).parse();
-            outputContents = new CodeGenerator(rootNode, moduleName).generate();
-        }
+        compile(sourcePath, outputPath, moduleName);
+    }
+
+    private static void compile(String sourcePath, String outputPath, String moduleName) throws IOException
+    {
+        String contents = readPath(sourcePath);
+        List<Token> tokens = new Tokenizer(contents).tokenize();
+        SyntaxNode rootNode = new Parser(contents, tokens).parse();
+        CompilationUnit compilationUnit = new SemanticAnalyzer(rootNode, moduleName).analyze();
+        String outputContents = new CodeGenerator(compilationUnit).generate();
         writePath(outputPath, outputContents);
     }
 
@@ -85,6 +89,16 @@ public class Main
         return new FileInputStream(new File(path));
     }
 
+    public static <T> String join(T[] array, String delimiter)
+    {
+        if (array.length == 0)
+            return "";
+        StringBuilder result = new StringBuilder();
+        result.append(array[0]);
+        for (int i = 1; i < array.length; i++)
+            result.append(delimiter).append(array[i]);
+        return result.toString();
+    }
     public static String join(Iterable<?> iterable, String delimiter)
     {
         Iterator<?> iterator = iterable.iterator();

@@ -1,31 +1,23 @@
 package com.wolfesoftware.dorp;
 
-import com.wolfesoftware.dorp.Parser.NodeType;
-import com.wolfesoftware.dorp.Parser.SyntaxNode;
+import com.wolfesoftware.dorp.SemanticAnalyzer.CompilationUnit;
 
 public class CodeGenerator
 {
-    private final SyntaxNode rootNode;
     private final StringBuilder result = new StringBuilder();
-    private final String moduleName;
-    public CodeGenerator(SyntaxNode rootNode, String moduleName)
+    private final String moduleName = "asdf";
+    public CodeGenerator(CompilationUnit compilationUnit)
     {
-        this.rootNode = rootNode;
-        this.moduleName = moduleName;
     }
     public String generate()
     {
-        generateFunction(moduleName, rootNode);
+        generateFunction(moduleName);
         result.append("@entry_point = alias void()* @").append(moduleName).append("\n");
         return result.toString();
     }
-    private void generateFunction(String functionName, SyntaxNode contentsNode)
+    private void generateFunction(String functionName)
     {
         result.append("define void @").append(functionName).append("() {\n");
-        if (contentsNode.type != NodeType.BLOCK_CONTENTS)
-            throw null;
-        for (SyntaxNode statementNode : contentsNode.children)
-            throw null;
         result.append("  ret void\n");
         result.append("}\n");
     }
