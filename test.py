@@ -15,8 +15,8 @@ def main():
   try: subprocess.Popen([assembler, "-help"], stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
   except OSError: sys.exit("ERROR: llc not found. is llvm installed?")
 
-  linker = "gcc"
-  try: subprocess.Popen([linker, "--help"], stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
+  gcc = "gcc"
+  try: subprocess.Popen([gcc, "--help"], stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
   except OSError: sys.exit("ERROR: gcc not found. is gcc installed?")
 
   tmp_dir = "test-tmp"
@@ -24,8 +24,8 @@ def main():
     shutil.rmtree(tmp_dir)
   os.makedirs(tmp_dir)
 
-  runtime_lib = os.path.join(tmp_dir, "main.s")
-  subprocess.Popen([assembler, "lib/main.ll", "-o", runtime_lib])
+  runtime_lib = os.path.join(tmp_dir, "main.o")
+  subprocess.Popen([gcc, "-c", "lib/main.c", "-o", runtime_lib])
 
   tests = os.listdir("test")
   if sys.argv[1:]:
@@ -41,7 +41,7 @@ def main():
     subprocess.check_call([assembler, assembly_file, "-o", object_file])
 
     executable = os.path.join(tmp_dir, test + ".exe")
-    subprocess.check_call([linker, runtime_lib, object_file, "-o", executable])
+    subprocess.check_call([gcc, runtime_lib, object_file, "-o", executable])
 
     test_output = subprocess.check_output([executable])
     expected_output = "".join(line + "\n" for line in re.findall("# (.*)", open(test_path).read()))
