@@ -1,5 +1,6 @@
 package com.wolfesoftware.dorp;
 
+import com.wolfesoftware.dorp.SemanticAnalyzer.Assignment;
 import com.wolfesoftware.dorp.SemanticAnalyzer.CompilationUnit;
 import com.wolfesoftware.dorp.SemanticAnalyzer.ConstantValue;
 import com.wolfesoftware.dorp.SemanticAnalyzer.DorpType;
@@ -8,15 +9,21 @@ import com.wolfesoftware.dorp.SemanticAnalyzer.FunctionDefinition;
 import com.wolfesoftware.dorp.SemanticAnalyzer.FunctionPrototype;
 import com.wolfesoftware.dorp.SemanticAnalyzer.FunctionSignature;
 import com.wolfesoftware.dorp.SemanticAnalyzer.StaticValue;
+import com.wolfesoftware.dorp.SemanticAnalyzer.VariableDefinition;
 
 public class CodeGenerator
 {
-    private final StringBuilder result = new StringBuilder();
     private final String moduleName = "asdf";
     private final CompilationUnit compilationUnit;
     public CodeGenerator(CompilationUnit compilationUnit)
     {
         this.compilationUnit = compilationUnit;
+    }
+    private final StringBuilder result = new StringBuilder();
+    @Override
+    public String toString()
+    {
+        return result.toString();
     }
     public String generate()
     {
@@ -47,8 +54,19 @@ public class CodeGenerator
         // TODO: also argument names
         renderTypeListWithCommas(argumentTypes);
         result.append(") {\n");
+
+        // alloca all local variables before anything else
+        for (VariableDefinition definition : function.getLocalVariableDefinitions()) {
+            String name = getVariablePointerName(definition);
+            result.append("  ").append(name).append(" = alloca ");
+            renderType(definition.type);
+            result.append("\n");
+        }
+
+        // all the logic
         for (StaticValue expression : function.expressions)
             evaluateExpression(expression);
+
         result.append("  ret void\n");
         result.append("}\n");
     }
@@ -88,7 +106,32 @@ public class CodeGenerator
             FunctionPrototype functionPrototype = (FunctionPrototype)expression;
             return "@" + functionPrototype.name;
         }
+        if (expression instanceof Assignment) {
+            Assignment assignment = (Assignment)expression;
+            String valueReference = evaluateExpression(assignment.value);
+            result.append("  store ");
+            renderType(assignment.value.getType());
+            result.append(" ").append(valueReference).append(", ");
+            renderType(assignment.definition.getType());
+            result.append("* ").append(getVariablePointerName(assignment.definition)).append("\n");
+            return valueReference;
+        }
+        if (expression instanceof VariableDefinition) {
+            VariableDefinition definition = (VariableDefinition)expression;
+            if (definition.constantValue != null)
+                return evaluateExpression(definition.constantValue);
+            String valueReference = generateReference();
+            result.append("  ").append(valueReference).append(" = load ");
+            renderType(definition.getType());
+            result.append("* ").append(getVariablePointerName(definition));
+            result.append("\n");
+            return valueReference;
+        }
         throw null;
+    }
+    private String getVariablePointerName(VariableDefinition definition)
+    {
+        return "%var." + definition.name;
     }
     private int nextReferenceIndex = 0;
     private String generateReference()
@@ -108,11 +151,12 @@ public class CodeGenerator
     private void renderType(DorpType type)
     {
         if (type instanceof FunctionSignature) {
+            // functions used as first-class objects are really the pointer to the function
             FunctionSignature signature = (FunctionSignature)type;
             renderType(signature.returnType);
             result.append("(");
             renderTypeListWithCommas(signature.argumentTypes);
-            result.append(")");
+            result.append(")*");
         } else {
             switch (type.name) {
                 case "Int":

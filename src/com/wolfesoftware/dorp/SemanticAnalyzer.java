@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
+import com.wolfesoftware.dorp.Parser.NodeType;
 import com.wolfesoftware.dorp.Parser.SyntaxNode;
 
 public class SemanticAnalyzer
@@ -36,7 +37,7 @@ public class SemanticAnalyzer
     private DorpNamespace createBuiltinContext()
     {
         DorpNamespace result = new DorpNamespace(null);
-        result.define("print", new FunctionPrototype(new FunctionSignature(voidType, intType), "dorp_print"));
+        result.defineConstant("print", new FunctionPrototype(new FunctionSignature(voidType, intType), "dorp_print"));
         return result;
     }
 
@@ -72,6 +73,15 @@ public class SemanticAnalyzer
                 String name = syntaxNode.getSimpleText();
                 return context.namespace.lookup(name);
             }
+            case VARIABLE_DECLARATION: {
+                SyntaxNode nameNode = syntaxNode.children[0].children[0];
+                if (nameNode.type != NodeType.IDENTIFIER)
+                    throw new RuntimeException();
+                String name = nameNode.getSimpleText();
+                StaticValue value = evaluate(context, syntaxNode.children[0].children[1]);
+                VariableDefinition definition = context.namespace.defineVariable(name, value.getType());
+                return new Assignment(definition, value);
+            }
             case NUMBER:
                 return new ConstantValue(intType, syntaxNode.getSimpleText());
             default:
@@ -100,6 +110,22 @@ public class SemanticAnalyzer
         }
     }
 
+    public class Assignment extends StaticValue
+    {
+        public final VariableDefinition definition;
+        public final StaticValue value;
+        public Assignment(VariableDefinition definition, StaticValue value)
+        {
+            this.definition = definition;
+            this.value = value;
+        }
+        @Override
+        public DorpType getType()
+        {
+            return value.getType();
+        }
+    }
+
     public class CompilationUnit
     {
         public final ArrayList<FunctionDefinition> functions = new ArrayList<>();
@@ -111,9 +137,9 @@ public class SemanticAnalyzer
         public List<FunctionPrototype> getFunctionPrototypes()
         {
             ArrayList<FunctionPrototype> result = new ArrayList<>();
-            for (StaticValue builtinValue : builtinNamespace.names.values())
-                if (builtinValue instanceof FunctionPrototype)
-                    result.add((FunctionPrototype)builtinValue);
+            for (VariableDefinition builtinDefinition : builtinNamespace.names.values())
+                if (builtinDefinition.constantValue instanceof FunctionPrototype)
+                    result.add((FunctionPrototype)builtinDefinition.constantValue);
             return result;
         }
     }
@@ -144,6 +170,10 @@ public class SemanticAnalyzer
             super(signature, name);
             this.blockContentsNode = blockContentsNode;
             this.namespace = namespace;
+        }
+        public List<VariableDefinition> getLocalVariableDefinitions()
+        {
+            return new ArrayList<>(namespace.names.values());
         }
         @Override
         public String toString()
@@ -190,23 +220,60 @@ public class SemanticAnalyzer
     private class DorpNamespace
     {
         public final DorpNamespace parent;
-        private final HashMap<String, StaticValue> names = new HashMap<>();
+        private final HashMap<String, VariableDefinition> names = new HashMap<>();
         public DorpNamespace(DorpNamespace parent)
         {
             this.parent = parent;
         }
-        public StaticValue lookup(String name)
+        public VariableDefinition lookup(String name)
         {
             for (DorpNamespace namespace = this; namespace != null; namespace = namespace.parent) {
-                StaticValue value = namespace.names.get(name);
-                if (value != null)
-                    return value;
+                VariableDefinition definition = namespace.names.get(name);
+                if (definition != null)
+                    return definition;
             }
             throw new RuntimeException();
         }
-        public void define(String name, StaticValue value)
+        public VariableDefinition defineConstant(String name, StaticValue constantValue)
         {
-            names.put(name, value);
+            return define(name, constantValue.getType(), constantValue);
+        }
+        public VariableDefinition defineVariable(String name, DorpType type)
+        {
+            return define(name, type, null);
+        }
+        private VariableDefinition define(String name, DorpType type, StaticValue constantValue)
+        {
+            if (names.containsKey(name))
+                throw new RuntimeException();
+            VariableDefinition definition = new VariableDefinition(name, type, this, constantValue);
+            names.put(name, definition);
+            return definition;
+        }
+    }
+
+    public class VariableDefinition extends StaticValue
+    {
+        public final StaticValue constantValue;
+        public final String name;
+        public final DorpType type;
+        public final DorpNamespace namespace;
+        public VariableDefinition(String name, DorpType type, DorpNamespace namespace, StaticValue constantValue)
+        {
+            this.name = name;
+            this.type = type;
+            this.namespace = namespace;
+            this.constantValue = constantValue;
+        }
+        @Override
+        public DorpType getType()
+        {
+            return type;
+        }
+        @Override
+        public String toString()
+        {
+            return type.toString() + " " + name;
         }
     }
 
