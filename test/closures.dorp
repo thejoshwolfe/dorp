@@ -1,0 +1,5 @@
+var a = 0;
+var assign_a()={ a = 1; }
+print(a); # 0
+assign_a()
+print(a); # 1

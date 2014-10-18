@@ -1,0 +1,10 @@
+var make_counter()={
+  var n = 0;
+  { n = n + 1; n }
+};
+var counter1 = make_counter();
+var counter2 = make_counter();
+print(counter1()); # 1
+print(counter1()); # 2
+print(counter2()); # 1
+print(counter2()); # 2
