@@ -13,7 +13,6 @@ import com.wolfesoftware.dorp.SemanticAnalyzer.VariableDefinition;
 
 public class CodeGenerator
 {
-    private final String moduleName = "asdf";
     private final CompilationUnit compilationUnit;
     public CodeGenerator(CompilationUnit compilationUnit)
     {
@@ -31,7 +30,6 @@ public class CodeGenerator
             renderFunctionDefinition((FunctionDefinition)functionPrototype);
             result.append("\n");
         }
-        result.append("@entry_point = alias void()* @").append(moduleName).append("\n");
         for (FunctionPrototype prototype : compilationUnit.getFunctionPrototypes())
             renderFunctionPrototype(prototype);
         return result.toString();
@@ -63,11 +61,23 @@ public class CodeGenerator
             result.append("\n");
         }
 
-        // all the logic
-        for (StaticValue expression : function.expressions)
-            evaluateExpression(expression);
+        // function body
+        String returnReference = null;
+        DorpType returnType = null;
+        for (StaticValue expression : function.expressions) {
+            returnReference = evaluateExpression(expression);
+            returnType = expression.getType();
+        }
 
-        result.append("  ret void\n");
+        // return statement
+        result.append("  ret ");
+        if (returnType != null && !isVoid(returnType)) {
+            renderType(returnType);
+            result.append(" ").append(returnReference);
+        } else {
+            result.append("void");
+        }
+        result.append("\n");
         result.append("}\n");
     }
     private String evaluateExpression(StaticValue expression)
@@ -78,7 +88,7 @@ public class CodeGenerator
             String[] argumentReferences = new String[functionCall.argumentValues.length];
             for (int i = 0; i < functionCall.argumentValues.length; i++)
                 argumentReferences[i] = evaluateExpression(functionCall.argumentValues[i]);
-            boolean isVoid = "Void".equals(functionCall.signature.returnType.name);
+            boolean isVoid = isVoid(functionCall.signature.returnType);
             String resultReference = isVoid ? null : generateReference();
             result.append("  ");
             if (!isVoid)
@@ -128,6 +138,10 @@ public class CodeGenerator
             return valueReference;
         }
         throw null;
+    }
+    private boolean isVoid(DorpType type)
+    {
+        return "Void".equals(type.name);
     }
     private String getVariablePointerName(VariableDefinition definition)
     {

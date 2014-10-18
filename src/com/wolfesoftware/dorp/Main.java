@@ -43,16 +43,15 @@ public class Main
         if (outputPath == null)
             outputPath = "-";
 
-        String moduleName = "asdf";
-        compile(sourcePath, outputPath, moduleName);
+        compile(sourcePath, outputPath);
     }
 
-    private static void compile(String sourcePath, String outputPath, String moduleName) throws IOException
+    private static void compile(String sourcePath, String outputPath) throws IOException
     {
         String contents = readPath(sourcePath);
         List<Token> tokens = new Tokenizer(contents).tokenize();
         SyntaxNode rootNode = new Parser(contents, tokens).parse();
-        CompilationUnit compilationUnit = new SemanticAnalyzer(rootNode, moduleName).analyze();
+        CompilationUnit compilationUnit = new SemanticAnalyzer(rootNode).analyze();
         String outputContents = new CodeGenerator(compilationUnit).generate();
         writePath(outputPath, outputContents);
     }

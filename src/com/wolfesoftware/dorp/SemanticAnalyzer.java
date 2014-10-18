@@ -4,18 +4,17 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
+import com.wolfesoftware.dorp.Parser.BlockNode;
 import com.wolfesoftware.dorp.Parser.NodeType;
 import com.wolfesoftware.dorp.Parser.SyntaxNode;
 
 public class SemanticAnalyzer
 {
     private final SyntaxNode rootNode;
-    private final String moduleName;
     private CompilationUnit compilationUnit;
-    public SemanticAnalyzer(SyntaxNode rootNode, String moduleName)
+    public SemanticAnalyzer(SyntaxNode rootNode)
     {
         this.rootNode = rootNode;
-        this.moduleName = moduleName;
     }
 
     public CompilationUnit analyze()
@@ -23,14 +22,10 @@ public class SemanticAnalyzer
         compilationUnit = new CompilationUnit(createBuiltinContext());
         DorpNamespace namespace = new DorpNamespace(createBuiltinContext());
 
-        FunctionDefinition moduleFunction = new FunctionDefinition(new FunctionSignature(voidType), moduleName, rootNode, namespace);
+        FunctionDefinition moduleFunction = new FunctionDefinition(new FunctionSignature(voidType), "entry_point", rootNode, namespace);
         compilationUnit.functions.add(moduleFunction);
-        for (int i = 0; i < compilationUnit.functions.size(); i++) {
-            // the size of the function list can change
-            FunctionPrototype function = compilationUnit.functions.get(i);
-            if (function instanceof FunctionDefinition)
-                analyzeFunctionDefinition((FunctionDefinition)function);
-        }
+        analyzeFunctionDefinition(moduleFunction);
+
         return compilationUnit;
     }
 
@@ -38,13 +33,18 @@ public class SemanticAnalyzer
     {
         DorpNamespace result = new DorpNamespace(null);
         result.defineConstant("print", new FunctionPrototype(new FunctionSignature(voidType, intType), "dorp_print"));
+        result.defineConstant("void", voidValue);
         return result;
     }
 
-    private void analyzeFunctionDefinition(FunctionDefinition functionDefinition)
+    private StaticValue analyzeFunctionDefinition(FunctionDefinition functionDefinition)
     {
-        for (SyntaxNode statement : functionDefinition.blockContentsNode.children)
-            functionDefinition.expressions.add(evaluate(functionDefinition, statement));
+        StaticValue lastValue = voidValue;
+        for (SyntaxNode statement : functionDefinition.blockContentsNode.children) {
+            lastValue = evaluate(functionDefinition, statement);
+            functionDefinition.expressions.add(lastValue);
+        }
+        return lastValue;
     }
 
     private StaticValue evaluate(FunctionDefinition context, SyntaxNode syntaxNode)
@@ -60,14 +60,42 @@ public class SemanticAnalyzer
                 if (argumentList.children.length != signature.argumentTypes.length)
                     throw new RuntimeException();
                 StaticValue[] argumentValues = new StaticValue[argumentList.children.length];
-                for (int i = 0; i < argumentList.children.length; i++) {
+                for (int i = 0; i < argumentValues.length; i++) {
                     StaticValue argument = evaluate(context, argumentList.children[i]);
-                    DorpType expectedType = signature.argumentTypes[i];
-                    if (argument.getType() != expectedType)
-                        throw new RuntimeException();
                     argumentValues[i] = argument;
                 }
+                if (signature.returnType != null) {
+                    // concrete function
+                    for (int i = 0; i < argumentValues.length; i++)
+                        if (argumentValues[i].getType() != signature.argumentTypes[i])
+                            throw new RuntimeException();
+                } else {
+                    // instantiate this function template
+                    FunctionDefinition functionTemplate = (FunctionDefinition)function;
+                    signature = new FunctionSignature(null, new DorpType[argumentValues.length]);
+                    for (int i = 0; i < argumentValues.length; i++)
+                        signature.argumentTypes[i] = argumentValues[i].getType();
+                    FunctionDefinition functionInstance = new FunctionDefinition(signature, generateBlockName(), functionTemplate.blockContentsNode, functionTemplate.namespace);
+                    StaticValue returnValue = analyzeFunctionDefinition(functionInstance);
+                    // the signature is now complete
+                    signature.returnType = returnValue.getType();
+                    compilationUnit.functions.add(functionInstance);
+                    function = functionInstance;
+                }
                 return new FunctionCall(function, signature, argumentValues);
+            }
+            case BLOCK: {
+                BlockNode blockNode = (BlockNode)syntaxNode;
+                DorpType[] argumentTypes;
+                if (blockNode.argumentDeclarations != null)
+                    argumentTypes = new DorpType[blockNode.argumentDeclarations.children.length];
+                else
+                    argumentTypes = new DorpType[0];
+                // all we really know is the number of parameters, not any of the types
+                FunctionSignature signature = new FunctionSignature(null, argumentTypes);
+                SyntaxNode blockContentsNode = blockNode.children[0];
+                DorpNamespace namespace = new DorpNamespace(context.namespace);
+                return new FunctionDefinition(signature, null, blockContentsNode, namespace);
             }
             case IDENTIFIER: {
                 String name = syntaxNode.getSimpleText();
@@ -87,6 +115,12 @@ public class SemanticAnalyzer
             default:
                 throw null;
         }
+    }
+
+    private int nextBlockIndex = 0;
+    private String generateBlockName()
+    {
+        return "block" + nextBlockIndex++;
     }
 
     public abstract class StaticValue
@@ -184,7 +218,7 @@ public class SemanticAnalyzer
 
     public class FunctionSignature extends DorpType
     {
-        public final DorpType returnType;
+        public DorpType returnType;
         public final DorpType[] argumentTypes;
         public FunctionSignature(DorpType returnType, DorpType... argumentTypes)
         {
@@ -278,7 +312,9 @@ public class SemanticAnalyzer
     }
 
     private final DorpType voidType = new DorpType("Void");
+    private final StaticValue voidValue = new ConstantValue(voidType, "void");
     private final DorpType intType = new DorpType("Int");
+
 
     public class DorpType
     {

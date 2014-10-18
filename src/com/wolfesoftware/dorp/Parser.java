@@ -557,7 +557,7 @@ public class Parser
                 builder.append(" \"").append(simpleText).append('"');
             }
         } else {
-            if (node.type == NodeType.BLOCK) {
+            if (node.type == NodeType.BLOCK && ((BlockNode)node).argumentDeclarations != null) {
                 builder.append("\n");
                 for (int i = 0; i < indentation + 1; i++)
                     builder.append("  ");
