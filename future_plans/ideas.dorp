@@ -6,6 +6,13 @@ def f={};
 def f(a)={};
 (a)={};
 
+# totally generic:
+def plus(a, b) = { a + b };
+# restrict the types of the parameters:
+def plus(Int(a), Int(b)) = { a + b };
+# make the parameter types match
+def plus(Type(T), T(a), T(b)) = { a + b };
+
 def square(list)={list.each((x)={x*x})};
 
 [1,2,3].each((x)={x*x});
