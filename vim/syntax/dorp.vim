@@ -16,10 +16,6 @@ syn keyword dorpKeyword if then else
 syn keyword dorpKeyword throw try catch as
 syn keyword dorpKeyword break continue return
 
-" builtins
-syn keyword dorpConstant print __return_context__
-syn keyword dorpConstant void null
-
 " atoms
 syn match   dorpNumber /-\?\<\d\+\>/
 syn match   dorpNumber  /\<0x\x\+\>/
@@ -47,7 +43,6 @@ hi def link dorpString String
 hi def link dorpEscape Special
 hi def link dorpEscapeError Error
 hi def link dorpKeyword Keyword
-hi def link dorpConstant Constant
 hi def link dorpBoolean Boolean
 hi def link dorpFloat Float
 hi def link dorpIdentifier Identifier
