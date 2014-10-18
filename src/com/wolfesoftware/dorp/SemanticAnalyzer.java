@@ -39,8 +39,14 @@ public class SemanticAnalyzer
 
     private StaticValue analyzeFunctionDefinition(FunctionDefinition functionDefinition)
     {
+        for (SyntaxNode statement : functionDefinition.blockContentsNode.children)
+            if (statement.type == NodeType.DEFINITION)
+                functionDefinition.expressions.add(evaluate(functionDefinition, statement));
+
         StaticValue lastValue = voidValue;
         for (SyntaxNode statement : functionDefinition.blockContentsNode.children) {
+            if (statement.type == NodeType.DEFINITION)
+                continue;
             lastValue = evaluate(functionDefinition, statement);
             functionDefinition.expressions.add(lastValue);
         }
@@ -97,24 +103,45 @@ public class SemanticAnalyzer
                 DorpNamespace namespace = new DorpNamespace(context.namespace);
                 return new FunctionDefinition(signature, null, blockContentsNode, namespace);
             }
-            case IDENTIFIER: {
-                String name = syntaxNode.getSimpleText();
-                return context.namespace.lookup(name);
-            }
-            case VARIABLE_DECLARATION: {
-                SyntaxNode nameNode = syntaxNode.children[0].children[0];
+            case DEFINITION:
+            case VARIABLE_DECLARATION:
+            case ASSIGNMENT: {
+                SyntaxNode assignment = syntaxNode.type == NodeType.ASSIGNMENT ? syntaxNode : syntaxNode.children[0];
+                SyntaxNode nameNode = assignment.children[0];
                 if (nameNode.type != NodeType.IDENTIFIER)
                     throw new RuntimeException();
                 String name = nameNode.getSimpleText();
-                StaticValue value = evaluate(context, syntaxNode.children[0].children[1]);
-                VariableDefinition definition = context.namespace.defineVariable(name, value.getType());
+                StaticValue value = evaluate(context, assignment.children[1]);
+                VariableDefinition definition;
+                if (syntaxNode.type == NodeType.DEFINITION) {
+                    definition = context.namespace.defineConstant(name, value);
+                } else if (syntaxNode.type == NodeType.VARIABLE_DECLARATION) {
+                    definition = context.namespace.defineVariable(name, value.getType());
+                } else if (syntaxNode.type == NodeType.ASSIGNMENT) {
+                    definition = context.namespace.lookup(name);
+                    if (definition.constantValue != null)
+                        throw new RuntimeException();
+                    definition.type = mergeTypes(definition.type, value.getType());
+                } else
+                    throw null;
                 return new Assignment(definition, value);
+            }
+            case IDENTIFIER: {
+                String name = syntaxNode.getSimpleText();
+                return context.namespace.lookup(name);
             }
             case NUMBER:
                 return new ConstantValue(intType, syntaxNode.getSimpleText());
             default:
                 throw null;
         }
+    }
+
+    private DorpType mergeTypes(DorpType type1, DorpType type2)
+    {
+        if (type1 == type2)
+            return type1;
+        throw new RuntimeException();
     }
 
     private int nextBlockIndex = 0;
@@ -229,7 +256,7 @@ public class SemanticAnalyzer
         @Override
         public String toString()
         {
-            return returnType.toString() + " (" + Main.join(argumentTypes, ", ") + ")";
+            return String.valueOf(returnType) + " (" + Main.join(argumentTypes, ", ") + ")";
         }
     }
 
@@ -290,7 +317,7 @@ public class SemanticAnalyzer
     {
         public final StaticValue constantValue;
         public final String name;
-        public final DorpType type;
+        public DorpType type;
         public final DorpNamespace namespace;
         public VariableDefinition(String name, DorpType type, DorpNamespace namespace, StaticValue constantValue)
         {
