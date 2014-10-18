@@ -9,9 +9,9 @@ def f(a)={};
 # totally generic:
 def plus(a, b) = { a + b };
 # restrict the types of the parameters:
-def plus(Int(a), Int(b)) = { a + b };
+def plus(a as Int, b as Int) = { a + b };
 # make the parameter types match
-def plus(Type(T), T(a), T(b)) = { a + b };
+def plus(T as Type, a as T, b as T) = { a + b };
 
 def square(list)={list.each((x)={x*x})};
 
@@ -48,8 +48,8 @@ List.@each(block) => {
     if ++i >= @length then break result;
     result.push(
       try block(@[i], i)
-      catch Continue as e if e.context == block.__return_context__ then continue
-      catch Break    as e if e.context == block.__return_context__ then break if e.value? then e.value else result
+      catch e as Continue if e.context == block.__return_context__ then continue
+      catch e as Break    if e.context == block.__return_context__ then break if e.value? then e.value else result
     );
   }
 };
@@ -62,20 +62,20 @@ return a; throw Return(__return_context__, (a));
 => {...}; {
   def __return_context__ = some_unique_thing;
   try (...)
-  catch Return as e if e.context is __return_context__ then e.value
+  catch e as Return if e.context is __return_context__ then e.value
 };
 loop ...; (
   try (
     # start of loop
     try (...)
-    catch Continue as e if e.context is __return_context__ then void
+    catch e as Continue if e.context is __return_context__ then void
     # goto start of loop
   )
-  catch Break as e if e.context is __return_context__ then e.value
+  catch e as Break if e.context is __return_context__ then e.value
 )
-try a catch Name as name if b then ...; (
+try a catch name as Name if b then ...; (
   try (a)
-  catch Name as name then
+  catch name as Name then
     if not (b) then rethrow (b) else (...)
 );
 
