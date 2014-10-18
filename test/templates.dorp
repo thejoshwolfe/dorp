@@ -1,0 +1,4 @@
+def make_invoker(f)={ (x)={ f(x) } };
+
+make_invoker(print)(1); # 1
+make_invoker(make_invoker)(print)(2); # 2
