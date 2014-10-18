@@ -25,7 +25,7 @@ def main():
   os.makedirs(tmp_dir)
 
   runtime_lib = os.path.join(tmp_dir, "main.o")
-  subprocess.Popen([gcc, "-c", "lib/main.c", "-o", runtime_lib])
+  subprocess.check_call([gcc, "-c", "lib/main.c", "-o", runtime_lib])
 
   tests = os.listdir("test")
   if sys.argv[1:]:
