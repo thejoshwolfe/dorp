@@ -1,4 +1,3 @@
-def make_invoker(f)={ (x)={ f(x) } };
+def id(x)={x};
 
-make_invoker(print)(1); # 1
-make_invoker(make_invoker)(print)(2); # 2
+id(print)(id(1)); # 1
