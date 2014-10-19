@@ -1,0 +1,18 @@
+# each of these functions eventually emits 2 llvm functions
+def subtract_normal(a, b)={ a - b };
+def subtract_reverse(a, b)={ b - a };
+
+var forwards = true;
+# the llvm type of this function is { int(int,int)*, float(float,float)* }()
+def get_subtractor()={ if forwards then subtract_normal else subtract_reverse };
+
+# the llvm type of this variable is { int(int,int)*, float(float,float)* }.
+# it contains pointers to every overload we need later
+var subtractor = get_subtractor();
+print(subtractor(5, 3)); # 2
+print(subtractor(5.0, 3.0)); # 2.0
+
+forwards = false;
+subtractor = get_subtractor();
+print(subtractor(5, 3)); # -2
+print(subtractor(5.0, 3.0)); # -2.0
