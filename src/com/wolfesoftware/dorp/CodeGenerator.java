@@ -2,13 +2,13 @@ package com.wolfesoftware.dorp;
 
 import com.wolfesoftware.dorp.SemanticAnalyzer.Assignment;
 import com.wolfesoftware.dorp.SemanticAnalyzer.CompilationUnit;
-import com.wolfesoftware.dorp.SemanticAnalyzer.ConstantValue;
+import com.wolfesoftware.dorp.SemanticAnalyzer.LiteralValue;
 import com.wolfesoftware.dorp.SemanticAnalyzer.DorpType;
 import com.wolfesoftware.dorp.SemanticAnalyzer.FunctionCall;
 import com.wolfesoftware.dorp.SemanticAnalyzer.FunctionDefinition;
 import com.wolfesoftware.dorp.SemanticAnalyzer.FunctionPrototype;
 import com.wolfesoftware.dorp.SemanticAnalyzer.FunctionSignature;
-import com.wolfesoftware.dorp.SemanticAnalyzer.StaticValue;
+import com.wolfesoftware.dorp.SemanticAnalyzer.DorpExpression;
 import com.wolfesoftware.dorp.SemanticAnalyzer.VariableDefinition;
 
 public class CodeGenerator
@@ -64,7 +64,7 @@ public class CodeGenerator
         // function body
         String returnReference = null;
         DorpType returnType = null;
-        for (StaticValue expression : function.expressions) {
+        for (DorpExpression expression : function.expressions) {
             returnReference = evaluateExpression(expression);
             returnType = expression.getType();
         }
@@ -80,7 +80,7 @@ public class CodeGenerator
         result.append("\n");
         result.append("}\n");
     }
-    private String evaluateExpression(StaticValue expression)
+    private String evaluateExpression(DorpExpression expression)
     {
         if (expression instanceof FunctionCall) {
             FunctionCall functionCall = (FunctionCall)expression;
@@ -108,8 +108,8 @@ public class CodeGenerator
             result.append(")\n");
             return resultReference;
         }
-        if (expression instanceof ConstantValue) {
-            ConstantValue constant = (ConstantValue)expression;
+        if (expression instanceof LiteralValue) {
+            LiteralValue constant = (LiteralValue)expression;
             return constant.text;
         }
         if (expression instanceof FunctionPrototype) {

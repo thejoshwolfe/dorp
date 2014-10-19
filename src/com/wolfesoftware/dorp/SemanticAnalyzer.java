@@ -33,31 +33,32 @@ public class SemanticAnalyzer
     {
         DorpNamespace result = new DorpNamespace(null);
         result.defineConstant("print", new FunctionPrototype(new FunctionSignature(voidType, intType), "dorp_print"));
-        result.defineConstant("void", voidValue);
+        result.defineConstant("void", new LiteralValue(voidType, "void"));
         return result;
     }
 
-    private StaticValue analyzeFunctionDefinition(FunctionDefinition functionDefinition)
+    private DorpType analyzeFunctionDefinition(FunctionDefinition functionDefinition)
     {
         for (SyntaxNode statement : functionDefinition.blockContentsNode.children)
             if (statement.type == NodeType.DEFINITION)
                 functionDefinition.expressions.add(evaluate(functionDefinition, statement));
 
-        StaticValue lastValue = voidValue;
+        DorpType returnType = voidType;
         for (SyntaxNode statement : functionDefinition.blockContentsNode.children) {
             if (statement.type == NodeType.DEFINITION)
                 continue;
-            lastValue = evaluate(functionDefinition, statement);
-            functionDefinition.expressions.add(lastValue);
+            DorpExpression expression = evaluate(functionDefinition, statement);
+            functionDefinition.expressions.add(expression);
+            returnType = expression.getType();
         }
-        return lastValue;
+        return returnType;
     }
 
-    private StaticValue evaluate(FunctionDefinition context, SyntaxNode syntaxNode)
+    private DorpExpression evaluate(FunctionDefinition context, SyntaxNode syntaxNode)
     {
         switch (syntaxNode.type) {
             case CALL: {
-                StaticValue function = evaluate(context, syntaxNode.children[0]);
+                DorpExpression function = evaluate(context, syntaxNode.children[0]);
                 DorpType functionType = function.getType();
                 if (!(functionType instanceof FunctionSignature))
                     throw new RuntimeException();
@@ -65,9 +66,9 @@ public class SemanticAnalyzer
                 SyntaxNode argumentList = syntaxNode.children[1];
                 if (argumentList.children.length != signature.argumentTypes.length)
                     throw new RuntimeException();
-                StaticValue[] argumentValues = new StaticValue[argumentList.children.length];
+                DorpExpression[] argumentValues = new DorpExpression[argumentList.children.length];
                 for (int i = 0; i < argumentValues.length; i++) {
-                    StaticValue argument = evaluate(context, argumentList.children[i]);
+                    DorpExpression argument = evaluate(context, argumentList.children[i]);
                     argumentValues[i] = argument;
                 }
                 if (signature.returnType != null) {
@@ -82,9 +83,9 @@ public class SemanticAnalyzer
                     for (int i = 0; i < argumentValues.length; i++)
                         signature.argumentTypes[i] = argumentValues[i].getType();
                     FunctionDefinition functionInstance = new FunctionDefinition(signature, generateBlockName(), functionTemplate.blockContentsNode, functionTemplate.namespace);
-                    StaticValue returnValue = analyzeFunctionDefinition(functionInstance);
+                    DorpType returnType = analyzeFunctionDefinition(functionInstance);
                     // the signature is now complete
-                    signature.returnType = returnValue.getType();
+                    signature.returnType = returnType;
                     compilationUnit.functions.add(functionInstance);
                     function = functionInstance;
                 }
@@ -111,7 +112,7 @@ public class SemanticAnalyzer
                 if (nameNode.type != NodeType.IDENTIFIER)
                     throw new RuntimeException();
                 String name = nameNode.getSimpleText();
-                StaticValue value = evaluate(context, assignment.children[1]);
+                DorpExpression value = evaluate(context, assignment.children[1]);
                 VariableDefinition definition;
                 if (syntaxNode.type == NodeType.DEFINITION) {
                     definition = context.namespace.defineConstant(name, value);
@@ -131,7 +132,7 @@ public class SemanticAnalyzer
                 return context.namespace.lookup(name);
             }
             case NUMBER:
-                return new ConstantValue(intType, syntaxNode.getSimpleText());
+                return new LiteralValue(intType, syntaxNode.getSimpleText());
             default:
                 throw null;
         }
@@ -150,16 +151,16 @@ public class SemanticAnalyzer
         return "block" + nextBlockIndex++;
     }
 
-    public abstract class StaticValue
+    public abstract class DorpExpression
     {
         public abstract DorpType getType();
     }
 
-    public class ConstantValue extends StaticValue
+    public class LiteralValue extends DorpExpression
     {
         public final DorpType type;
         public final String text;
-        public ConstantValue(DorpType type, String text)
+        public LiteralValue(DorpType type, String text)
         {
             this.type = type;
             this.text = text;
@@ -171,11 +172,11 @@ public class SemanticAnalyzer
         }
     }
 
-    public class Assignment extends StaticValue
+    public class Assignment extends DorpExpression
     {
         public final VariableDefinition definition;
-        public final StaticValue value;
-        public Assignment(VariableDefinition definition, StaticValue value)
+        public final DorpExpression value;
+        public Assignment(VariableDefinition definition, DorpExpression value)
         {
             this.definition = definition;
             this.value = value;
@@ -205,7 +206,7 @@ public class SemanticAnalyzer
         }
     }
 
-    public class FunctionPrototype extends StaticValue
+    public class FunctionPrototype extends DorpExpression
     {
         public final FunctionSignature signature;
         public final String name;
@@ -225,7 +226,7 @@ public class SemanticAnalyzer
     {
         private final SyntaxNode blockContentsNode;
         private final DorpNamespace namespace;
-        public final ArrayList<StaticValue> expressions = new ArrayList<>();
+        public final ArrayList<DorpExpression> expressions = new ArrayList<>();
         public FunctionDefinition(FunctionSignature signature, String name, SyntaxNode blockContentsNode, DorpNamespace namespace)
         {
             super(signature, name);
@@ -260,12 +261,12 @@ public class SemanticAnalyzer
         }
     }
 
-    public class FunctionCall extends StaticValue
+    public class FunctionCall extends DorpExpression
     {
-        public final StaticValue function;
+        public final DorpExpression function;
         public final FunctionSignature signature;
-        public final StaticValue[] argumentValues;
-        public FunctionCall(StaticValue function, FunctionSignature signature, StaticValue[] argumentValues)
+        public final DorpExpression[] argumentValues;
+        public FunctionCall(DorpExpression function, FunctionSignature signature, DorpExpression[] argumentValues)
         {
             this.function = function;
             this.signature = signature;
@@ -295,7 +296,7 @@ public class SemanticAnalyzer
             }
             throw new RuntimeException();
         }
-        public VariableDefinition defineConstant(String name, StaticValue constantValue)
+        public VariableDefinition defineConstant(String name, DorpExpression constantValue)
         {
             return define(name, constantValue.getType(), constantValue);
         }
@@ -303,7 +304,7 @@ public class SemanticAnalyzer
         {
             return define(name, type, null);
         }
-        private VariableDefinition define(String name, DorpType type, StaticValue constantValue)
+        private VariableDefinition define(String name, DorpType type, DorpExpression constantValue)
         {
             if (names.containsKey(name))
                 throw new RuntimeException();
@@ -313,13 +314,13 @@ public class SemanticAnalyzer
         }
     }
 
-    public class VariableDefinition extends StaticValue
+    public class VariableDefinition extends DorpExpression
     {
-        public final StaticValue constantValue;
+        public final DorpExpression constantValue;
         public final String name;
         public DorpType type;
         public final DorpNamespace namespace;
-        public VariableDefinition(String name, DorpType type, DorpNamespace namespace, StaticValue constantValue)
+        public VariableDefinition(String name, DorpType type, DorpNamespace namespace, DorpExpression constantValue)
         {
             this.name = name;
             this.type = type;
@@ -339,7 +340,6 @@ public class SemanticAnalyzer
     }
 
     private final DorpType voidType = new DorpType("Void");
-    private final StaticValue voidValue = new ConstantValue(voidType, "void");
     private final DorpType intType = new DorpType("Int");
 
 
