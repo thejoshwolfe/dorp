@@ -12,8 +12,9 @@ syn case match
 
 " keywords
 syn keyword dorpKeyword def var
+syn keyword dorpKeyword do as
 syn keyword dorpKeyword if then else
-syn keyword dorpKeyword throw try catch as
+syn keyword dorpKeyword try catch finally throw rethrow
 syn keyword dorpKeyword break continue return
 
 " atoms
@@ -21,15 +22,15 @@ syn match   dorpNumber /-\?\<\d\+\>/
 syn match   dorpNumber  /\<0x\x\+\>/
 syn match   dorpFloat  /-\?\<\d\+\.\d*\(e[+-]\d\+\)\?\>/
 syn keyword dorpBoolean true false
-syn region  dorpString start=/"/ skip=/\\"/ end=/"/ contains=dorpEscape,dorpEscapeError
-syn match   dorpEscape +\\[n"\\]+ contained
-syn match   dorpEscape "\\x\x\{2}" contained
-syn match   dorpEscapeError +\\[^n"\\x]+ contained
 syn match   dorpIdentifier /[a-z_][a-zA-Z_0-9]*/
 syn match   dorpType /[A-Z][a-zA-Z_0-9]*/
 
-" comments and whitespace
-syn match   dorpComment /#.*$/ contains=dorpCommentError
+" regions
+syn region  dorpString start=/"/ skip=/\\"/ end=/"/ contains=dorpEscape,dorpEscapeError,@Spell
+syn match   dorpEscape +\\[n"\\]+ contained
+syn match   dorpEscape "\\x\x\{2}" contained
+syn match   dorpEscapeError +\\[^n"\\x]+ contained
+syn match   dorpComment /#.*$/ contains=dorpCommentError,@Spell
 syn match   dorpCommentError display excludenl " \+$" contained
 syn match   dorpError display excludenl " \+$"
 syn match   dorpError "\t"

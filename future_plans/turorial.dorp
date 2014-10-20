@@ -1,0 +1,242 @@
+# the top-level scope is the body of the main function
+print("hello world!");
+
+# statements are separated by ";"
+# statements are expressions
+1;       # (this statement has no effect)
+"hello"; # (this statement has no effect)
+print(if true then "yes" else "no");
+
+# variables are declared with "var", and must be initialized immediately
+var a = 1;
+a = 2;
+# the type of a variable cannot change
+var a = 1;
+a = "1"; # ERROR: type Int not assignable from type String
+
+# constants are defined with "def", and must be initialized immediately
+def buffer_size = 0x1000;
+buffer_size = 0x10; # ERROR: cannot change the value of a constant
+
+# constants are initialized in source order in a pre-pass before anything else
+var variable = constant;              # execution order 3
+variable += 1;                        # execution order 4
+def constant = 10;                    # execution order 1
+def derrived_constant = constant * 2; # execution order 2
+
+# the exact value of a constant need not be known at compile time
+def runtime_constant = get_user_input();
+
+# functions are defined with "{...}"
+def print_hello = {
+  print("hello");
+};
+print_hello();
+# equivalently:
+{
+  print("hello");
+}();
+
+# the return value from a function is the last statement
+def returns_2 = {
+  1;
+  2
+};
+# if the last statement is followed by a ";", then the return value is "void"
+def do_nothing = {
+  1;
+  2;
+};
+# equivalently:
+def do_nothing = {
+  1;
+  2;
+  void
+};
+# or of course:
+def do_nothing = {};
+
+# function parameters can be declared in two different ways (possibly a violation of dorp philosophy)
+# this syntax is reminiscent of function call syntax:
+var plus(a, b) = {a + b};
+plus(1, 2); # returns 3
+# to enable anonymous functions, this syntax is also available:
+((a, b)={a + b})(1, 2); # returns 3
+# these are all equivalent:
+def f()={};
+def f=(()={});
+def f=()={}; # (assignment operator resolves right-to-left)
+def f={};
+
+# functions are first-class objects
+def get_operator(is_multiplication) = {
+  if is_multiplication then
+    (a, b)={a * b}
+  else
+    (a, b)={a + b}
+  # (the lack of ";" in the above if-else expression means the function objects are the return values)
+};
+print(get_operator(false)(2, 5)); # prints 7
+print(get_operator(true)(2, 5)); # prints 10
+
+# the "as" operator is a compile-time assertion of the type of a value
+var a = 1;
+var b = "1";
+a as Int;   # not a compile error
+b as Int;   # ERROR: type String is not type Int
+
+# the "as" operator returns the value
+print(f() as Int); # no compile error means f() returns Int
+# equivalently: (barring any compile errors)
+print(f());
+
+# the types of function parameters can be restricted/documented by function implementors:
+# (note that the syntax allowed in argument declarations is restricted to only a few language constructs)
+def plus(a as Int, b as Int) = { a + b };
+# function calls can look the same as function declarations using type restrictions:
+var a = get_something();
+var b = get_something_else();
+plus(a as Int, b as Int); # will compile iff a and b are Int
+
+# control structures:
+
+# if-then-else is the familiar ?: operator from C:
+result = if condition then then_value else else_value;
+# without an "else" clause, the "else" value is implicitly "void"
+if a then f();
+# equivalently:
+if a then f() else void;
+# the types of the then_value and else_value must be compatible
+if f() then 1 else "1"; # ERROR: incompatible types Int and String
+if f() then 1; # ERROR: incompatible types Int and Void (this restriction might relax someday)
+# only 1 of then_value and else_value are evaluated
+if true then print("true") else print("false"); # prints "true"
+# to get multi-line blocks in there, use "do" clauses
+if f() then do {
+  print("true");
+} else do {
+  print("false");
+};
+# the dangling-else problem is resolved in the familiar way
+if true then if false else print("hello"); # prints "hello"
+# the condition must be a Boolean, not an Int or any other type
+if 1 then f(); # ERROR: condition must be type Boolean
+if "" then f(); # ERROR: condition must be type Boolean
+
+# "do" is used to immediately execute an anonymous void function
+do {
+  print("hello");
+}; # prints "hello"
+# equivalently:
+{
+  print("hello");
+}(); # prints "hello"
+# "do" can only be used on anonymous void functions
+do f; # ERROR: expected anonymous function
+var a = do { 1 }; # ERROR: "do" used on non-void function
+
+# void is a first-class value of type Void
+var a = void;
+a as Void; # not a compile error
+a = do {}; # not a compile error
+a == void; # true
+a != void; # false
+(x as Void) == (y as Void); # always true (or a compile error)
+# the Void type is probably not useful when used directly,
+# however it naturally comes into play when using function templates in certain ways
+def map(list, f) = {
+  var result = List();
+  # just bear with me here...
+  list.forEach((a) = {
+    result.append(f(a));
+  });
+  result
+};
+map([1,2,3], (x)={x*x}); # returns [1,4,9]
+map([1,2,3], print); # prints the values, and returns [void,void,void]
+# (note that n-sized arrays of Void take up O(1) space, since each Void value is 0 bits of information)
+
+# try-catch-finally is an expression (rather than a compound statement in other languages)
+var a = try parse_int_somehow(string) catch NumberFormatException then 0;
+# "try" cannot be used in isolation
+var a = try 1; # ERROR: expected "catch" or "finally" clause(s)
+# any number of "catch" clauses can be used, and a single "finally" clause can be used
+try
+  throw Exception()
+catch NumberFormatException then
+  print("doesn't happen"); # not executed
+catch e as Exception then
+  print("exception") # prints "exception"
+finally
+  print("done"); # prints "done"
+# using "do" allows you to use ";" in the clauses
+try do {
+  throw Exeption();
+} catch e as Exeption then do {
+  print("exception"); # prints "exception"
+} finally do {
+  print("done"); # prints "done"
+};
+# "catch" clauses can take an optional "if" clause
+try
+  throw ExceptionWithValue(1)
+catch e as ExceptionWithValue if e.value == 0 then
+  print("value mismatch")
+catch e as ExceptionWithValue if e.value == 1 then
+  print("value matches"); # prints "value matches"
+equivalently:
+try
+  throw ExceptionWithValue(1)
+catch e as ExceptionWithValue do {
+  if e.value == 0 then
+    print("value mismatch")
+  else if e.value == 1 then
+    print("value matches") # prints "value matches"
+  else
+    rethrow;
+};
+
+# "throw" and "rethrow" are expressions
+var a = if b != null then b else throw Exception();
+# "rethrow" can only be used in a catch clause
+rethrow; # ERROR: "rethrow" can only be used in a catch clause
+def invoke_this(f)={f()};
+try do {
+  throw Exception();
+} catch Exception then do {
+  invoke_this({
+    rethrow; # rethrows the Exception object in the syntactically nearest enclosing catch clause
+  });
+};
+
+# "return" and "=>"
+# it is possible to abruptly return from a function call using "return",
+# but only if the function was declared with the alternate "=>" syntax
+def number_to_string(n) => {
+  if n == 0 then return "zero"; # returns from number_to_string()
+  if n == 1 then return "one";
+  throw Exception();
+};
+def not_returnable() = {
+  return 1; # ERROR: "return" must be within a "=>" function
+};
+# the following are all equivalent (possibly a violation of dorp philosophy)
+def f()=>{};
+def f=(()=>{});
+def f=(=>{});
+def f=()=>{}; # ("=>" has the same precedence as "=")
+def f= =>{}; # (the space is required to avoid mistokenizing "==")
+def f=>{};
+# the "return" statement works from within nested function scopes
+def number_to_string(n) => {
+  def return_this(s) = {
+    return s; # returns from number_to_string()
+  };
+  return_this("zero");
+  # unreachable:
+  throw Exception();
+};
+# if the value is omitted from a "return" expression, it is implicitly "void"
+def do_nothing() => {
+  return; # same as "return void"
+};

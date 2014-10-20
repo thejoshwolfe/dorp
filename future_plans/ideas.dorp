@@ -1,17 +1,4 @@
-def f()={};
-()={};
-def f={};
-{};
-
-def f(a)={};
-(a)={};
-
-# totally generic:
-def plus(a, b) = { a + b };
-# restrict the types of the parameters:
-def plus(a as Int, b as Int) = { a + b };
-# make the parameter types match
-def plus(T as Type, a as T, b as T) = { a + b };
+# (this file is sketches of ideas)
 
 def square(list)={list.each((x)={x*x})};
 
