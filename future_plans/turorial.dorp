@@ -100,7 +100,7 @@ plus(a as Int, b as Int); # will compile iff a and b are Int
 
 # control structures:
 
-# if-then-else is the familiar ?: operator from C:
+# if-then-else is the familiar ?: operator from C
 result = if condition then then_value else else_value;
 # without an "else" clause, the "else" value is implicitly "void"
 if a then f();
@@ -187,7 +187,7 @@ catch e as ExceptionWithValue if e.value == 1 then
 equivalently:
 try
   throw ExceptionWithValue(1)
-catch e as ExceptionWithValue do {
+catch e as ExceptionWithValue then do {
   if e.value == 0 then
     print("value mismatch")
   else if e.value == 1 then
