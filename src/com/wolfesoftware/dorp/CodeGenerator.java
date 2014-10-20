@@ -2,15 +2,21 @@ package com.wolfesoftware.dorp;
 
 import com.wolfesoftware.dorp.SemanticAnalyzer.Assignment;
 import com.wolfesoftware.dorp.SemanticAnalyzer.CompilationUnit;
-import com.wolfesoftware.dorp.SemanticAnalyzer.LiteralValue;
+import com.wolfesoftware.dorp.SemanticAnalyzer.DorpExpression;
 import com.wolfesoftware.dorp.SemanticAnalyzer.DorpType;
 import com.wolfesoftware.dorp.SemanticAnalyzer.FunctionCall;
-import com.wolfesoftware.dorp.SemanticAnalyzer.FunctionDefinition;
 import com.wolfesoftware.dorp.SemanticAnalyzer.FunctionPrototype;
-import com.wolfesoftware.dorp.SemanticAnalyzer.FunctionSignature;
-import com.wolfesoftware.dorp.SemanticAnalyzer.DorpExpression;
+import com.wolfesoftware.dorp.SemanticAnalyzer.LiteralValue;
+import com.wolfesoftware.dorp.SemanticAnalyzer.StatementList;
+import com.wolfesoftware.dorp.SemanticAnalyzer.StaticFunctionDefinition;
+import com.wolfesoftware.dorp.SemanticAnalyzer.StaticFunctionSignature;
+import com.wolfesoftware.dorp.SemanticAnalyzer.TemplateFunctionType;
 import com.wolfesoftware.dorp.SemanticAnalyzer.VariableDefinition;
 
+/**
+ * much of this class overlaps with functionality provided by the llvm dev library.
+ * TODO: someday, consider something like this: https://gist.github.com/andrewrk/1558b3a1c4dd1c130bbf
+ */
 public class CodeGenerator
 {
     private final CompilationUnit compilationUnit;
@@ -27,10 +33,10 @@ public class CodeGenerator
     public String generate()
     {
         for (FunctionPrototype functionPrototype : compilationUnit.functions) {
-            renderFunctionDefinition((FunctionDefinition)functionPrototype);
+            renderFunctionDefinition((StaticFunctionDefinition)functionPrototype);
             result.append("\n");
         }
-        for (FunctionPrototype prototype : compilationUnit.getFunctionPrototypes())
+        for (FunctionPrototype prototype : compilationUnit.functionPrototypes)
             renderFunctionPrototype(prototype);
         return result.toString();
     }
@@ -38,16 +44,16 @@ public class CodeGenerator
     {
         result.append("declare ");
         renderType(prototype.signature.returnType);
-        result.append(" @").append(prototype.name).append("(");
+        result.append(" @").append(prototype.signature.symbolName).append("(");
         DorpType[] argumentTypes = prototype.signature.argumentTypes;
         renderTypeListWithCommas(argumentTypes);
         result.append(")\n");
     }
-    private void renderFunctionDefinition(FunctionDefinition function)
+    private void renderFunctionDefinition(StaticFunctionDefinition function)
     {
         result.append("define ");
         renderType(function.signature.returnType);
-        result.append(" @").append(function.name).append("(");
+        result.append(" @").append(function.signature.symbolName).append("(");
         DorpType[] argumentTypes = function.signature.argumentTypes;
         // TODO: also argument names
         renderTypeListWithCommas(argumentTypes);
@@ -62,16 +68,12 @@ public class CodeGenerator
         }
 
         // function body
-        String returnReference = null;
-        DorpType returnType = null;
-        for (DorpExpression expression : function.expressions) {
-            returnReference = evaluateExpression(expression);
-            returnType = expression.getType();
-        }
+        String returnReference = evaluateExpression(function.expression);
+        DorpType returnType = function.expression.getType();
 
         // return statement
         result.append("  ret ");
-        if (returnType != null && !isVoid(returnType)) {
+        if (!isVoid(returnType)) {
             renderType(returnType);
             result.append(" ").append(returnReference);
         } else {
@@ -82,6 +84,13 @@ public class CodeGenerator
     }
     private String evaluateExpression(DorpExpression expression)
     {
+        if (expression instanceof StatementList) {
+            StatementList statementList = (StatementList)expression;
+            String resultReference = null;
+            for (DorpExpression childExpression : statementList.expressions)
+                resultReference = evaluateExpression(childExpression);
+            return resultReference;
+        }
         if (expression instanceof FunctionCall) {
             FunctionCall functionCall = (FunctionCall)expression;
             String functionReference = evaluateExpression(functionCall.function);
@@ -110,11 +119,16 @@ public class CodeGenerator
         }
         if (expression instanceof LiteralValue) {
             LiteralValue constant = (LiteralValue)expression;
-            return constant.text;
-        }
-        if (expression instanceof FunctionPrototype) {
-            FunctionPrototype functionPrototype = (FunctionPrototype)expression;
-            return "@" + functionPrototype.name;
+            DorpType type = constant.getType();
+            if (type instanceof StaticFunctionSignature) {
+                StaticFunctionSignature signature = (StaticFunctionSignature)type;
+                return "@" + signature.symbolName;
+            }
+            if (type instanceof TemplateFunctionType) {
+                // TODO
+                throw null;
+            }
+            return Main.nullCheck(constant.text);
         }
         if (expression instanceof Assignment) {
             Assignment assignment = (Assignment)expression;
@@ -164,9 +178,9 @@ public class CodeGenerator
     }
     private void renderType(DorpType type)
     {
-        if (type instanceof FunctionSignature) {
+        if (type instanceof StaticFunctionSignature) {
             // functions used as first-class objects are really the pointer to the function
-            FunctionSignature signature = (FunctionSignature)type;
+            StaticFunctionSignature signature = (StaticFunctionSignature)type;
             renderType(signature.returnType);
             result.append("(");
             renderTypeListWithCommas(signature.argumentTypes);

@@ -1,6 +1,7 @@
 package com.wolfesoftware.dorp;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 
@@ -19,12 +20,13 @@ public class SemanticAnalyzer
 
     public CompilationUnit analyze()
     {
-        compilationUnit = new CompilationUnit(createBuiltinContext());
-        DorpNamespace namespace = new DorpNamespace(createBuiltinContext());
+        compilationUnit = new CompilationUnit();
+        DorpNamespace builtinContext = createBuiltinContext();
+        DorpNamespace namespace = new DorpNamespace(builtinContext);
 
-        FunctionDefinition moduleFunction = new FunctionDefinition(new FunctionSignature(voidType), "entry_point", rootNode, namespace);
+        StaticFunctionDefinition moduleFunction = new StaticFunctionDefinition(new StaticFunctionSignature(voidType, "entry_point"), rootNode, namespace);
         compilationUnit.functions.add(moduleFunction);
-        analyzeFunctionDefinition(moduleFunction);
+        moduleFunction.expression = evaluate(moduleFunction.namespace, moduleFunction.blockContentsNode);
 
         return compilationUnit;
     }
@@ -32,77 +34,68 @@ public class SemanticAnalyzer
     private DorpNamespace createBuiltinContext()
     {
         DorpNamespace result = new DorpNamespace(null);
-        result.defineConstant("print", new FunctionPrototype(new FunctionSignature(voidType, intType), "dorp_print"));
+        StaticFunctionSignature printFunctionSignature = new StaticFunctionSignature(voidType, "dorp_print", intType);
+        compilationUnit.functionPrototypes.add(new FunctionPrototype(printFunctionSignature));
+        result.defineConstant("print", new LiteralValue(printFunctionSignature, null));
         result.defineConstant("void", new LiteralValue(voidType, "void"));
         return result;
     }
 
-    private DorpType analyzeFunctionDefinition(FunctionDefinition functionDefinition)
-    {
-        for (SyntaxNode statement : functionDefinition.blockContentsNode.children)
-            if (statement.type == NodeType.DEFINITION)
-                functionDefinition.expressions.add(evaluate(functionDefinition, statement));
-
-        DorpType returnType = voidType;
-        for (SyntaxNode statement : functionDefinition.blockContentsNode.children) {
-            if (statement.type == NodeType.DEFINITION)
-                continue;
-            DorpExpression expression = evaluate(functionDefinition, statement);
-            functionDefinition.expressions.add(expression);
-            returnType = expression.getType();
-        }
-        return returnType;
-    }
-
-    private DorpExpression evaluate(FunctionDefinition context, SyntaxNode syntaxNode)
+    private DorpExpression evaluate(DorpNamespace namespace, SyntaxNode syntaxNode)
     {
         switch (syntaxNode.type) {
+            case BLOCK_CONTENTS: {
+                ArrayList<DorpExpression> expressions = new ArrayList<>();
+                for (SyntaxNode statement : syntaxNode.children)
+                    if (statement.type == NodeType.DEFINITION)
+                        expressions.add(evaluate(namespace, statement));
+                for (SyntaxNode statement : syntaxNode.children)
+                    if (statement.type != NodeType.DEFINITION)
+                        expressions.add(evaluate(namespace, statement));
+                return new StatementList(expressions);
+            }
             case CALL: {
-                DorpExpression function = evaluate(context, syntaxNode.children[0]);
-                DorpType functionType = function.getType();
-                if (!(functionType instanceof FunctionSignature))
-                    throw new RuntimeException();
-                FunctionSignature signature = (FunctionSignature)functionType;
+                // get the types of everything we're working with
+                DorpExpression function = evaluate(namespace, syntaxNode.children[0]);
                 SyntaxNode argumentList = syntaxNode.children[1];
-                if (argumentList.children.length != signature.argumentTypes.length)
-                    throw new RuntimeException();
                 DorpExpression[] argumentValues = new DorpExpression[argumentList.children.length];
+                DorpType[] argumentTypes = new DorpType[argumentValues.length];
                 for (int i = 0; i < argumentValues.length; i++) {
-                    DorpExpression argument = evaluate(context, argumentList.children[i]);
-                    argumentValues[i] = argument;
+                    argumentValues[i] = evaluate(namespace, argumentList.children[i]);
+                    argumentTypes[i] = argumentValues[i].getType();
                 }
-                if (signature.returnType != null) {
-                    // concrete function
+                // what kind of function are we calling?
+                DorpType functionType = function.getType();
+                if (functionType instanceof StaticFunctionSignature) {
+                    StaticFunctionSignature signature = (StaticFunctionSignature)functionType;
+                    if (argumentValues.length != signature.argumentTypes.length)
+                        throw new RuntimeException();
                     for (int i = 0; i < argumentValues.length; i++)
-                        if (argumentValues[i].getType() != signature.argumentTypes[i])
+                        if (argumentTypes[i] != signature.argumentTypes[i])
                             throw new RuntimeException();
-                } else {
-                    // instantiate this function template
-                    FunctionDefinition functionTemplate = (FunctionDefinition)function;
-                    signature = new FunctionSignature(null, new DorpType[argumentValues.length]);
-                    for (int i = 0; i < argumentValues.length; i++)
-                        signature.argumentTypes[i] = argumentValues[i].getType();
-                    FunctionDefinition functionInstance = new FunctionDefinition(signature, generateBlockName(), functionTemplate.blockContentsNode, functionTemplate.namespace);
-                    DorpType returnType = analyzeFunctionDefinition(functionInstance);
-                    // the signature is now complete
-                    signature.returnType = returnType;
-                    compilationUnit.functions.add(functionInstance);
-                    function = functionInstance;
+                    return new FunctionCall(function, signature, argumentValues);
                 }
-                return new FunctionCall(function, signature, argumentValues);
+                if (functionType instanceof TemplateFunctionReference) {
+                    TemplateFunctionReference templateReference = (TemplateFunctionReference)functionType;
+                    if (argumentValues.length != templateReference.argumentCount)
+                        throw new RuntimeException();
+                    // instantiate all possible function bodies for this set of argument types
+                    List<TemplateFunctionInstantiation> instantiations = templateReference.instantiate(argumentTypes);
+                    for (TemplateFunctionInstantiation instantiation : instantiations) {
+                        DorpNamespace newNamespace = new DorpNamespace(instantiation.templateDefinition.parentNamespace);
+                        evaluate(newNamespace, instantiation.templateDefinition.blockContentsNode);
+                    }
+                    throw null;
+                }
+                throw null;
             }
             case BLOCK: {
                 BlockNode blockNode = (BlockNode)syntaxNode;
-                DorpType[] argumentTypes;
-                if (blockNode.argumentDeclarations != null)
-                    argumentTypes = new DorpType[blockNode.argumentDeclarations.children.length];
-                else
-                    argumentTypes = new DorpType[0];
-                // all we really know is the number of parameters, not any of the types
-                FunctionSignature signature = new FunctionSignature(null, argumentTypes);
+                // tODO: care about the argument names
+                int argumentCount = blockNode.argumentDeclarations != null ? blockNode.argumentDeclarations.children.length : 0;
                 SyntaxNode blockContentsNode = blockNode.children[0];
-                DorpNamespace namespace = new DorpNamespace(context.namespace);
-                return new FunctionDefinition(signature, null, blockContentsNode, namespace);
+                TemplateFunctionDefinition templateDefinition = new TemplateFunctionDefinition(argumentCount, blockContentsNode, namespace);
+                return new LiteralValue(new TemplateFunctionReference(templateDefinition), null);
             }
             case DEFINITION:
             case VARIABLE_DECLARATION:
@@ -112,14 +105,14 @@ public class SemanticAnalyzer
                 if (nameNode.type != NodeType.IDENTIFIER)
                     throw new RuntimeException();
                 String name = nameNode.getSimpleText();
-                DorpExpression value = evaluate(context, assignment.children[1]);
+                DorpExpression value = evaluate(namespace, assignment.children[1]);
                 VariableDefinition definition;
                 if (syntaxNode.type == NodeType.DEFINITION) {
-                    definition = context.namespace.defineConstant(name, value);
+                    definition = namespace.defineConstant(name, value);
                 } else if (syntaxNode.type == NodeType.VARIABLE_DECLARATION) {
-                    definition = context.namespace.defineVariable(name, value.getType());
+                    definition = namespace.defineVariable(name, value.getType());
                 } else if (syntaxNode.type == NodeType.ASSIGNMENT) {
-                    definition = context.namespace.lookup(name);
+                    definition = namespace.lookup(name);
                     if (definition.constantValue != null)
                         throw new RuntimeException();
                     definition.type = mergeTypes(definition.type, value.getType());
@@ -129,7 +122,7 @@ public class SemanticAnalyzer
             }
             case IDENTIFIER: {
                 String name = syntaxNode.getSimpleText();
-                return context.namespace.lookup(name);
+                return namespace.lookup(name);
             }
             case NUMBER:
                 return new LiteralValue(intType, syntaxNode.getSimpleText());
@@ -190,46 +183,27 @@ public class SemanticAnalyzer
 
     public class CompilationUnit
     {
-        public final ArrayList<FunctionDefinition> functions = new ArrayList<>();
-        private DorpNamespace builtinNamespace;
-        public CompilationUnit(DorpNamespace builtinNamespace)
-        {
-            this.builtinNamespace = builtinNamespace;
-        }
-        public List<FunctionPrototype> getFunctionPrototypes()
-        {
-            ArrayList<FunctionPrototype> result = new ArrayList<>();
-            for (VariableDefinition builtinDefinition : builtinNamespace.names.values())
-                if (builtinDefinition.constantValue instanceof FunctionPrototype)
-                    result.add((FunctionPrototype)builtinDefinition.constantValue);
-            return result;
-        }
+        public final ArrayList<FunctionPrototype> functionPrototypes = new ArrayList<>();
+        public final ArrayList<StaticFunctionDefinition> functions = new ArrayList<>();
     }
 
-    public class FunctionPrototype extends DorpExpression
+    public class FunctionPrototype
     {
-        public final FunctionSignature signature;
-        public final String name;
-        public FunctionPrototype(FunctionSignature signature, String name)
+        public final StaticFunctionSignature signature;
+        public FunctionPrototype(StaticFunctionSignature signature)
         {
             this.signature = signature;
-            this.name = name;
-        }
-        @Override
-        public DorpType getType()
-        {
-            return signature;
         }
     }
 
-    public class FunctionDefinition extends FunctionPrototype
+    public class StaticFunctionDefinition extends FunctionPrototype
     {
         private final SyntaxNode blockContentsNode;
         private final DorpNamespace namespace;
-        public final ArrayList<DorpExpression> expressions = new ArrayList<>();
-        public FunctionDefinition(FunctionSignature signature, String name, SyntaxNode blockContentsNode, DorpNamespace namespace)
+        public DorpExpression expression = null;
+        public StaticFunctionDefinition(StaticFunctionSignature signature, SyntaxNode blockContentsNode, DorpNamespace namespace)
         {
-            super(signature, name);
+            super(signature);
             this.blockContentsNode = blockContentsNode;
             this.namespace = namespace;
         }
@@ -240,33 +214,113 @@ public class SemanticAnalyzer
         @Override
         public String toString()
         {
-            return signature.toString() + " " + name;
+            return signature.toString() + " {...}";
         }
     }
 
-    public class FunctionSignature extends DorpType
+    public class StaticFunctionSignature extends DorpType
     {
         public DorpType returnType;
+        public final String symbolName;
         public final DorpType[] argumentTypes;
-        public FunctionSignature(DorpType returnType, DorpType... argumentTypes)
+        public StaticFunctionSignature(DorpType returnType, String symbolName, DorpType... argumentTypes)
         {
             super(null);
-            this.returnType = returnType;
-            this.argumentTypes = argumentTypes;
+            this.returnType = Main.nullCheck(returnType);
+            this.symbolName = symbolName;
+            this.argumentTypes = Main.nullCheckArrayElemnts(argumentTypes);
         }
         @Override
         public String toString()
         {
-            return String.valueOf(returnType) + " (" + Main.join(argumentTypes, ", ") + ")";
+            return returnType.toString() + " " + symbolName + "(" + Main.join(argumentTypes, ", ") + ")";
+        }
+    }
+
+    public abstract class TemplateFunctionType extends DorpType
+    {
+        public final int argumentCount;
+        public TemplateFunctionType(int argumentCount)
+        {
+            super(null);
+            this.argumentCount = argumentCount;
+        }
+        public abstract List<TemplateFunctionInstantiation> instantiate(DorpType[] argumentTypes);
+        @Override
+        public String toString()
+        {
+            StringBuilder result = new StringBuilder();
+            result.append("? (");
+            for (int i = 0; i < argumentCount; i++)
+                result.append("?");
+            result.append(")");
+            return result.toString();
+        }
+    }
+
+    public class TemplateFunctionReference extends TemplateFunctionType
+    {
+        public final ArrayList<TemplateFunctionType> references = new ArrayList<>();
+        public TemplateFunctionReference(TemplateFunctionType firstReference)
+        {
+            super(firstReference.argumentCount);
+            references.add(firstReference);
+        }
+        @Override
+        public List<TemplateFunctionInstantiation> instantiate(DorpType[] argumentTypes)
+        {
+            ArrayList<TemplateFunctionInstantiation> result = new ArrayList<>();
+            for (TemplateFunctionType reference : references)
+                result.addAll(reference.instantiate(argumentTypes));
+            return result;
+        }
+    }
+
+    public class TemplateFunctionDefinition extends TemplateFunctionType
+    {
+        private final SyntaxNode blockContentsNode;
+        private final DorpNamespace parentNamespace;
+        private final ArrayList<TemplateFunctionInstantiation> instantiations = new ArrayList<>();
+        public TemplateFunctionDefinition(int argumentCount, SyntaxNode blockContentsNode, DorpNamespace parentNamespace)
+        {
+            super(argumentCount);
+            this.blockContentsNode = blockContentsNode;
+            this.parentNamespace = parentNamespace;
+        }
+        @Override
+        public List<TemplateFunctionInstantiation> instantiate(DorpType[] argumentTypes)
+        {
+            TemplateFunctionInstantiation instantiation = new TemplateFunctionInstantiation(this, argumentTypes);
+            instantiations.add(instantiation);
+            return Arrays.asList(instantiation);
+        }
+    }
+
+    public class TemplateFunctionInstantiation
+    {
+        public final TemplateFunctionDefinition templateDefinition;
+        public final DorpType[] argumentTypes;
+        public DorpType returnType;
+        public final String symbolName;
+        public TemplateFunctionInstantiation(TemplateFunctionDefinition templateDefinition, DorpType[] argumentTypes)
+        {
+            this.templateDefinition = templateDefinition;
+            this.argumentTypes = argumentTypes;
+            this.symbolName = generateBlockName();
+        }
+        @Override
+        public String toString()
+        {
+            return String.valueOf(returnType) + " " + symbolName + "(" + Main.join(argumentTypes, ", ") + ")";
         }
     }
 
     public class FunctionCall extends DorpExpression
     {
         public final DorpExpression function;
-        public final FunctionSignature signature;
+        public final StaticFunctionSignature signature;
         public final DorpExpression[] argumentValues;
-        public FunctionCall(DorpExpression function, FunctionSignature signature, DorpExpression[] argumentValues)
+        public FunctionCall(DorpExpression function, StaticFunctionSignature signature, DorpExpression[] argumentValues)
         {
             this.function = function;
             this.signature = signature;
@@ -276,6 +330,23 @@ public class SemanticAnalyzer
         public DorpType getType()
         {
             return signature.returnType;
+        }
+    }
+
+    public class StatementList extends DorpExpression
+    {
+        public final List<DorpExpression> expressions;
+        public StatementList(List<DorpExpression> expressions)
+        {
+            this.expressions = expressions;
+        }
+        @Override
+        public DorpType getType()
+        {
+            DorpType result = voidType;
+            if (expressions.size() > 0)
+                result = expressions.get(expressions.size() - 1).getType();
+            return result;
         }
     }
 

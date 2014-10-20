@@ -130,4 +130,17 @@ public class Main
     {
         return sorted(Arrays.asList(array));
     }
+
+    public static <T> T nullCheck(T value)
+    {
+        if (value == null)
+            throw new NullPointerException();
+        return value;
+    }
+    public static <T> T[] nullCheckArrayElemnts(T[] value)
+    {
+        for (T element : value)
+            nullCheck(element);
+        return value;
+    }
 }
