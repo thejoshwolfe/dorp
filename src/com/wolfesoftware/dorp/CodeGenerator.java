@@ -190,7 +190,7 @@ public class CodeGenerator
             throw null;
         } else {
             switch (type.name) {
-                case "Int":
+                case "Integer":
                     result.append("i32");
                     break;
                 case "Void":

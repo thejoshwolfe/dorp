@@ -439,7 +439,7 @@ public class SemanticAnalyzer
     }
 
     private final DorpType voidType = new DorpType("Void");
-    private final DorpType intType = new DorpType("Int");
+    private final DorpType intType = new DorpType("Integer");
 
 
     public class DorpType
