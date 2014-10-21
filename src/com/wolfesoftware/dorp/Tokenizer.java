@@ -48,10 +48,12 @@ public class Tokenizer
         grandPattern = Main.join(patternGroups, "|");
     }
     private static final Pattern grandRegex = Pattern.compile(grandPattern);
-    public static final HashSet<String> keywords = new HashSet<>(Arrays.asList( //
-            "def", //
-            "do", //
-            "var"));
+    private static final HashSet<String> keywords = new HashSet<>(Arrays.asList( //
+            "def", "var", //
+            "do", "as", //
+            "if", "then", "else", //
+            "try", "catch", "finally", "throw", "rethrow", //
+            "break", "continue", "return"));
 
     private final String string;
     public Tokenizer(String string)

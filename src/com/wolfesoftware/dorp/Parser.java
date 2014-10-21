@@ -27,7 +27,8 @@ public class Parser
         BLOCK, //
         NUMBER, //
         IDENTIFIER, //
-        VARIABLE_DECLARATION;
+        VARIABLE_DECLARATION, //
+        IF_THEN;
     }
 
     private final HashMap<RuleName, ParserRule> nameToRule = new HashMap<>();
@@ -151,6 +152,7 @@ public class Parser
         // terminals and groups
         nameToRule.put(RuleName.ATOM, new ParserRule(any( //
                 rule(RuleName.BLOCK), //
+                rule(RuleName.IF_THEN), //
                 rule(RuleName.PARENS), //
                 rule(RuleName.NUMBER), //
                 rule(RuleName.IDENTIFIER))));
@@ -161,6 +163,26 @@ public class Parser
                 // discard "(" and ")" operators
                 node.children = new SyntaxNode[] { node.children[1] };
                 node.type = NodeType.PARENS;
+                return node;
+            }
+        });
+        nameToRule.put(RuleName.IF_THEN, new ParserRule(sequence( //
+                operator("if"), rule(RuleName.EXPRESSION), //
+                operator("then"), rule(RuleName.EXPRESSION), //
+                maybe(sequence(operator("else"), rule(RuleName.EXPRESSION))))) {
+            @Override
+            public SyntaxNode postProcess(SyntaxNode node)
+            {
+                SyntaxNode condition = node.children[1];
+                SyntaxNode thenValue = node.children[3];
+                SyntaxNode elseClause = node.children[4];
+                if (elseClause.children != null) {
+                    SyntaxNode elseValue = elseClause.children[1];
+                    node.children = new SyntaxNode[] { condition, thenValue, elseValue };
+                } else {
+                    node.children = new SyntaxNode[] { condition, thenValue };
+                }
+                node.type = NodeType.IF_THEN;
                 return node;
             }
         });
@@ -509,7 +531,8 @@ public class Parser
         BLOCK, //
         NUMBER, //
         IDENTIFIER, //
-        VARIABLE_DECLARATION;
+        VARIABLE_DECLARATION, //
+        IF_THEN;
     }
 
     public class SyntaxNode
