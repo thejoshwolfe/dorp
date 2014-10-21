@@ -97,13 +97,13 @@ public class CodeGenerator
             String[] argumentReferences = new String[functionCall.argumentValues.length];
             for (int i = 0; i < functionCall.argumentValues.length; i++)
                 argumentReferences[i] = evaluateExpression(functionCall.argumentValues[i]);
-            boolean isVoid = isVoid(functionCall.signature.returnType);
+            boolean isVoid = isVoid(functionCall.returnType);
             String resultReference = isVoid ? null : generateReference();
             result.append("  ");
             if (!isVoid)
                 result.append(resultReference).append(" = ");
             result.append("call ");
-            renderType(functionCall.signature.returnType);
+            renderType(functionCall.returnType);
             result.append(" ").append(functionReference).append("(");
             if (argumentReferences.length > 0) {
                 renderType(functionCall.argumentValues[0].getType());
@@ -185,6 +185,9 @@ public class CodeGenerator
             result.append("(");
             renderTypeListWithCommas(signature.argumentTypes);
             result.append(")*");
+        } else if (type instanceof TemplateFunctionType) {
+            // TODO
+            throw null;
         } else {
             switch (type.name) {
                 case "Int":

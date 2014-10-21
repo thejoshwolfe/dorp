@@ -73,28 +73,42 @@ public class SemanticAnalyzer
                     for (int i = 0; i < argumentValues.length; i++)
                         if (argumentTypes[i] != signature.argumentTypes[i])
                             throw new RuntimeException();
-                    return new FunctionCall(function, signature, argumentValues);
+                    return new FunctionCall(function, signature.returnType, argumentValues);
                 }
                 if (functionType instanceof TemplateFunctionReference) {
                     TemplateFunctionReference templateReference = (TemplateFunctionReference)functionType;
-                    if (argumentValues.length != templateReference.argumentCount)
+                    if (argumentValues.length != templateReference.getArgumentCount())
                         throw new RuntimeException();
                     // instantiate all possible function bodies for this set of argument types
                     List<TemplateFunctionInstantiation> instantiations = templateReference.instantiate(argumentTypes);
+                    ArrayList<DorpType> returnTypes = new ArrayList<>();
                     for (TemplateFunctionInstantiation instantiation : instantiations) {
                         DorpNamespace newNamespace = new DorpNamespace(instantiation.templateDefinition.parentNamespace);
-                        evaluate(newNamespace, instantiation.templateDefinition.blockContentsNode);
+                        for (int i = 0; i < argumentTypes.length; i++)
+                            newNamespace.defineVariable(instantiation.templateDefinition.argumentNames[i], argumentTypes[i]);
+                        DorpType returnType = evaluate(newNamespace, instantiation.templateDefinition.blockContentsNode).getType();
+                        instantiation.returnType = returnType;
+                        returnTypes.add(returnType);
                     }
-                    throw null;
+                    DorpType returnType = returnTypes.get(0);
+                    for (int i = 1; i < returnTypes.size(); i ++)
+                        returnType = mergeTypes(returnType, returnTypes.get(i));
+                    return new FunctionCall(function, returnType, argumentValues);
                 }
                 throw null;
             }
             case BLOCK: {
                 BlockNode blockNode = (BlockNode)syntaxNode;
                 // tODO: care about the argument names
-                int argumentCount = blockNode.argumentDeclarations != null ? blockNode.argumentDeclarations.children.length : 0;
+                String[] argumentNames = new String[blockNode.argumentDeclarations != null ? blockNode.argumentDeclarations.children.length : 0];
+                for (int i = 0; i < argumentNames.length; i++) {
+                    SyntaxNode argumentNode = blockNode.argumentDeclarations.children[i];
+                    if (argumentNode.type != NodeType.IDENTIFIER)
+                        throw new RuntimeException();
+                    argumentNames[i] = argumentNode.getSimpleText();
+                }
                 SyntaxNode blockContentsNode = blockNode.children[0];
-                TemplateFunctionDefinition templateDefinition = new TemplateFunctionDefinition(argumentCount, blockContentsNode, namespace);
+                TemplateFunctionDefinition templateDefinition = new TemplateFunctionDefinition(argumentNames, blockContentsNode, namespace);
                 return new LiteralValue(new TemplateFunctionReference(templateDefinition), null);
             }
             case DEFINITION:
@@ -239,23 +253,12 @@ public class SemanticAnalyzer
 
     public abstract class TemplateFunctionType extends DorpType
     {
-        public final int argumentCount;
-        public TemplateFunctionType(int argumentCount)
+        public TemplateFunctionType()
         {
             super(null);
-            this.argumentCount = argumentCount;
         }
+        public abstract int getArgumentCount();
         public abstract List<TemplateFunctionInstantiation> instantiate(DorpType[] argumentTypes);
-        @Override
-        public String toString()
-        {
-            StringBuilder result = new StringBuilder();
-            result.append("? (");
-            for (int i = 0; i < argumentCount; i++)
-                result.append("?");
-            result.append(")");
-            return result.toString();
-        }
     }
 
     public class TemplateFunctionReference extends TemplateFunctionType
@@ -263,8 +266,12 @@ public class SemanticAnalyzer
         public final ArrayList<TemplateFunctionType> references = new ArrayList<>();
         public TemplateFunctionReference(TemplateFunctionType firstReference)
         {
-            super(firstReference.argumentCount);
             references.add(firstReference);
+        }
+        @Override
+        public int getArgumentCount()
+        {
+            return references.get(0).getArgumentCount();
         }
         @Override
         public List<TemplateFunctionInstantiation> instantiate(DorpType[] argumentTypes)
@@ -274,16 +281,22 @@ public class SemanticAnalyzer
                 result.addAll(reference.instantiate(argumentTypes));
             return result;
         }
+        @Override
+        public String toString()
+        {
+            return "{ " + Main.join(references, ", ") + " }";
+        }
     }
 
     public class TemplateFunctionDefinition extends TemplateFunctionType
     {
+        private final String[] argumentNames;
         private final SyntaxNode blockContentsNode;
         private final DorpNamespace parentNamespace;
         private final ArrayList<TemplateFunctionInstantiation> instantiations = new ArrayList<>();
-        public TemplateFunctionDefinition(int argumentCount, SyntaxNode blockContentsNode, DorpNamespace parentNamespace)
+        public TemplateFunctionDefinition(String[] argumentNames, SyntaxNode blockContentsNode, DorpNamespace parentNamespace)
         {
-            super(argumentCount);
+            this.argumentNames = argumentNames;
             this.blockContentsNode = blockContentsNode;
             this.parentNamespace = parentNamespace;
         }
@@ -293,6 +306,21 @@ public class SemanticAnalyzer
             TemplateFunctionInstantiation instantiation = new TemplateFunctionInstantiation(this, argumentTypes);
             instantiations.add(instantiation);
             return Arrays.asList(instantiation);
+        }
+        @Override
+        public int getArgumentCount()
+        {
+            return argumentNames.length;
+        }
+        @Override
+        public String toString()
+        {
+            StringBuilder result = new StringBuilder();
+            result.append("? (");
+            for (int i = 0; i < argumentNames.length; i++)
+                result.append("?");
+            result.append(")");
+            return result.toString();
         }
     }
 
@@ -318,18 +346,18 @@ public class SemanticAnalyzer
     public class FunctionCall extends DorpExpression
     {
         public final DorpExpression function;
-        public final StaticFunctionSignature signature;
+        public final DorpType returnType;
         public final DorpExpression[] argumentValues;
-        public FunctionCall(DorpExpression function, StaticFunctionSignature signature, DorpExpression[] argumentValues)
+        public FunctionCall(DorpExpression function, DorpType returnType, DorpExpression[] argumentValues)
         {
             this.function = function;
-            this.signature = signature;
+            this.returnType = returnType;
             this.argumentValues = argumentValues;
         }
         @Override
         public DorpType getType()
         {
-            return signature.returnType;
+            return returnType;
         }
     }
 
