@@ -34,9 +34,11 @@ public class SemanticAnalyzer
     private DorpNamespace createBuiltinContext()
     {
         DorpNamespace result = new DorpNamespace(null);
-        StaticFunctionSignature printFunctionSignature = new StaticFunctionSignature(voidType, "dorp_print", intType);
+        StaticFunctionSignature printFunctionSignature = new StaticFunctionSignature(voidType, "dorp_print", integerType);
         compilationUnit.functionPrototypes.add(new FunctionPrototype(printFunctionSignature));
         result.defineConstant("print", new LiteralValue(printFunctionSignature, null));
+        result.defineConstant("true", new LiteralValue(booleanType, "true"));
+        result.defineConstant("false", new LiteralValue(booleanType, "false"));
         result.defineConstant("void", new LiteralValue(voidType, "void"));
         return result;
     }
@@ -91,7 +93,7 @@ public class SemanticAnalyzer
                         returnTypes.add(returnType);
                     }
                     DorpType returnType = returnTypes.get(0);
-                    for (int i = 1; i < returnTypes.size(); i ++)
+                    for (int i = 1; i < returnTypes.size(); i++)
                         returnType = mergeTypes(returnType, returnTypes.get(i));
                     return new FunctionCall(function, returnType, argumentValues);
                 }
@@ -110,6 +112,17 @@ public class SemanticAnalyzer
                 SyntaxNode blockContentsNode = blockNode.children[0];
                 TemplateFunctionDefinition templateDefinition = new TemplateFunctionDefinition(argumentNames, blockContentsNode, namespace);
                 return new LiteralValue(new TemplateFunctionReference(templateDefinition), null);
+            }
+            case IF_THEN: {
+                DorpExpression condition = evaluate(namespace, syntaxNode.children[0]);
+                DorpExpression thenValue = evaluate(namespace, syntaxNode.children[1]);
+                DorpExpression elseValue = syntaxNode.children.length > 2 ? evaluate(namespace, syntaxNode.children[2]) : null;
+                if (condition.getType() != booleanType)
+                    throw new RuntimeException();
+                DorpType thenType = thenValue.getType();
+                DorpType elseType = elseValue != null ? elseValue.getType() : voidType;
+                DorpType returnType = mergeTypes(thenType, elseType);
+                return new IfThenElse(condition, thenValue, elseValue, returnType);
             }
             case DEFINITION:
             case VARIABLE_DECLARATION:
@@ -139,7 +152,7 @@ public class SemanticAnalyzer
                 return namespace.lookup(name);
             }
             case NUMBER:
-                return new LiteralValue(intType, syntaxNode.getSimpleText());
+                return new LiteralValue(integerType, syntaxNode.getSimpleText());
             default:
                 throw null;
         }
@@ -192,6 +205,28 @@ public class SemanticAnalyzer
         public DorpType getType()
         {
             return value.getType();
+        }
+    }
+
+    public class IfThenElse extends DorpExpression
+    {
+        private final DorpExpression condition;
+        private final DorpExpression thenValue;
+        private final DorpExpression elseValue;
+        private final DorpType returnType;
+
+        public IfThenElse(DorpExpression condition, DorpExpression thenValue, DorpExpression elseValue, DorpType returnType)
+        {
+            this.condition = condition;
+            this.thenValue = thenValue;
+            this.elseValue = elseValue;
+            this.returnType = returnType;
+        }
+
+        @Override
+        public DorpType getType()
+        {
+            return returnType;
         }
     }
 
@@ -439,7 +474,8 @@ public class SemanticAnalyzer
     }
 
     private final DorpType voidType = new DorpType("Void");
-    private final DorpType intType = new DorpType("Integer");
+    private final DorpType integerType = new DorpType("Integer");
+    private final DorpType booleanType = new DorpType("Boolean");
 
 
     public class DorpType

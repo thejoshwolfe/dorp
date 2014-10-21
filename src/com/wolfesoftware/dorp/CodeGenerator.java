@@ -128,6 +128,8 @@ public class CodeGenerator
                 // TODO
                 throw null;
             }
+            if ("Boolean".equals(type.name))
+                return constant.text.equals("true") ? "1" : "0";
             return Main.nullCheck(constant.text);
         }
         if (expression instanceof Assignment) {
@@ -192,6 +194,9 @@ public class CodeGenerator
             switch (type.name) {
                 case "Integer":
                     result.append("i32");
+                    break;
+                case "Boolean":
+                    result.append("i1");
                     break;
                 case "Void":
                     result.append("void");
