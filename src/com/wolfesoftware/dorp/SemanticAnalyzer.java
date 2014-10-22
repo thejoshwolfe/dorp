@@ -210,9 +210,9 @@ public class SemanticAnalyzer
 
     public class IfThenElse extends DorpExpression
     {
-        private final DorpExpression condition;
-        private final DorpExpression thenValue;
-        private final DorpExpression elseValue;
+        public final DorpExpression condition;
+        public final DorpExpression thenValue;
+        public final DorpExpression elseValue;
         private final DorpType returnType;
 
         public IfThenElse(DorpExpression condition, DorpExpression thenValue, DorpExpression elseValue, DorpType returnType)

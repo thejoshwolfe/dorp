@@ -4,3 +4,5 @@ if true then print(3) else print(4); # 3
 if false then print(5) else print(6); # 6
 var seven = if true then 7 else 8;
 print(seven); # 7
+var ten = if false then 9 else 10;
+print(ten); # 10

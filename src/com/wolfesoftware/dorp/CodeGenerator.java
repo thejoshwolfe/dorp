@@ -6,6 +6,7 @@ import com.wolfesoftware.dorp.SemanticAnalyzer.DorpExpression;
 import com.wolfesoftware.dorp.SemanticAnalyzer.DorpType;
 import com.wolfesoftware.dorp.SemanticAnalyzer.FunctionCall;
 import com.wolfesoftware.dorp.SemanticAnalyzer.FunctionPrototype;
+import com.wolfesoftware.dorp.SemanticAnalyzer.IfThenElse;
 import com.wolfesoftware.dorp.SemanticAnalyzer.LiteralValue;
 import com.wolfesoftware.dorp.SemanticAnalyzer.StatementList;
 import com.wolfesoftware.dorp.SemanticAnalyzer.StaticFunctionDefinition;
@@ -132,6 +133,31 @@ public class CodeGenerator
                 return constant.text.equals("true") ? "1" : "0";
             return Main.nullCheck(constant.text);
         }
+        if (expression instanceof IfThenElse) {
+            IfThenElse ifThenElse = (IfThenElse)expression;
+            String conditionReference = evaluateExpression(ifThenElse.condition);
+            String thenLabel = generateLabel();
+            String elseLabel = generateLabel();
+            String doneLabel = ifThenElse.elseValue != null ? generateLabel() : elseLabel;
+            result.append("  br ");
+            // we know this is i1:
+            renderType(ifThenElse.condition.getType());
+            result.append(" ").append(conditionReference);
+            result.append(", label %").append(thenLabel).append(", label %").append(elseLabel).append("\n");
+
+            result.append(thenLabel).append(":\n");
+            String thenReference = evaluateExpression(ifThenElse.thenValue);
+            result.append("  br label %").append(doneLabel).append("\n");
+
+            if (ifThenElse.elseValue != null) {
+                result.append(elseLabel).append(":\n");
+                String elseReference = evaluateExpression(ifThenElse.elseValue);
+                result.append("  br label %").append(doneLabel).append("\n");
+            }
+
+            result.append(doneLabel).append(":\n");
+            return thenReference;
+        }
         if (expression instanceof Assignment) {
             Assignment assignment = (Assignment)expression;
             String valueReference = evaluateExpression(assignment.value);
@@ -167,6 +193,10 @@ public class CodeGenerator
     private String generateReference()
     {
         return "%val" + nextReferenceIndex++;
+    }
+    private String generateLabel()
+    {
+        return "label" + nextReferenceIndex++;
     }
     private void renderTypeListWithCommas(DorpType[] types)
     {
