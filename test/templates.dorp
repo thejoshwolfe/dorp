@@ -1,3 +1,6 @@
-def id(x)={x};
+def id1(x)={x};
+def id2(x)={x};
+
+var id = if true then id1 else id2;
 
 id(print)(id(1)); # 1
