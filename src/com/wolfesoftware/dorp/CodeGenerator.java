@@ -147,39 +147,54 @@ public class CodeGenerator
 
             result.append(thenLabel).append(":\n");
             String thenReference = evaluateExpression(ifThenElse.thenValue);
+            if (ifThenElse.returnValueVariable != null)
+                renderAssignment(thenReference, ifThenElse.returnValueVariable);
             result.append("  br label %").append(doneLabel).append("\n");
 
             if (ifThenElse.elseValue != null) {
                 result.append(elseLabel).append(":\n");
                 String elseReference = evaluateExpression(ifThenElse.elseValue);
+                if (ifThenElse.returnValueVariable != null)
+                    renderAssignment(elseReference, ifThenElse.returnValueVariable);
                 result.append("  br label %").append(doneLabel).append("\n");
             }
 
             result.append(doneLabel).append(":\n");
-            return thenReference;
+            String returnReference = null;
+            if (ifThenElse.returnValueVariable != null)
+                returnReference = renderVariableGet(ifThenElse.returnValueVariable);
+            return returnReference;
         }
         if (expression instanceof Assignment) {
             Assignment assignment = (Assignment)expression;
             String valueReference = evaluateExpression(assignment.value);
-            result.append("  store ");
-            renderType(assignment.value.getType());
-            result.append(" ").append(valueReference).append(", ");
-            renderType(assignment.definition.getType());
-            result.append("* ").append(getVariablePointerName(assignment.definition)).append("\n");
+            renderAssignment(valueReference, assignment.definition);
             return valueReference;
         }
         if (expression instanceof VariableDefinition) {
             VariableDefinition definition = (VariableDefinition)expression;
-            if (definition.constantValue != null)
-                return evaluateExpression(definition.constantValue);
-            String valueReference = generateReference();
-            result.append("  ").append(valueReference).append(" = load ");
-            renderType(definition.getType());
-            result.append("* ").append(getVariablePointerName(definition));
-            result.append("\n");
-            return valueReference;
+            return renderVariableGet(definition);
         }
         throw null;
+    }
+    private String renderVariableGet(VariableDefinition definition)
+    {
+        if (definition.constantValue != null)
+            return evaluateExpression(definition.constantValue);
+        String valueReference = generateReference();
+        result.append("  ").append(valueReference).append(" = load ");
+        renderType(definition.getType());
+        result.append("* ").append(getVariablePointerName(definition));
+        result.append("\n");
+        return valueReference;
+    }
+    private void renderAssignment(String valueReference, VariableDefinition definition)
+    {
+        result.append("  store ");
+        renderType(definition.getType());
+        result.append(" ").append(valueReference).append(", ");
+        renderType(definition.getType());
+        result.append("* ").append(getVariablePointerName(definition)).append("\n");
     }
     private boolean isVoid(DorpType type)
     {

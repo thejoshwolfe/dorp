@@ -122,7 +122,8 @@ public class SemanticAnalyzer
                 DorpType thenType = thenValue.getType();
                 DorpType elseType = elseValue != null ? elseValue.getType() : voidType;
                 DorpType returnType = mergeTypes(thenType, elseType);
-                return new IfThenElse(condition, thenValue, elseValue, returnType);
+                VariableDefinition returnValueVariable = returnType != voidType ? namespace.reserveTemporaryVariable(returnType) : null;
+                return new IfThenElse(condition, thenValue, elseValue, returnValueVariable);
             }
             case DEFINITION:
             case VARIABLE_DECLARATION:
@@ -213,20 +214,19 @@ public class SemanticAnalyzer
         public final DorpExpression condition;
         public final DorpExpression thenValue;
         public final DorpExpression elseValue;
-        private final DorpType returnType;
-
-        public IfThenElse(DorpExpression condition, DorpExpression thenValue, DorpExpression elseValue, DorpType returnType)
+        /** if <code>null</code>, return type is Void */
+        public final VariableDefinition returnValueVariable;
+        public IfThenElse(DorpExpression condition, DorpExpression thenValue, DorpExpression elseValue, VariableDefinition returnValueVariable)
         {
             this.condition = condition;
             this.thenValue = thenValue;
             this.elseValue = elseValue;
-            this.returnType = returnType;
+            this.returnValueVariable = returnValueVariable;
         }
-
         @Override
         public DorpType getType()
         {
-            return returnType;
+            return returnValueVariable != null ? returnValueVariable.type : voidType;
         }
     }
 
@@ -445,6 +445,12 @@ public class SemanticAnalyzer
             VariableDefinition definition = new VariableDefinition(name, type, this, constantValue);
             names.put(name, definition);
             return definition;
+        }
+        public VariableDefinition reserveTemporaryVariable(DorpType type)
+        {
+            // the "." ensures this isn't a user name
+            String name = "tmp." + names.size();
+            return defineVariable(name, type);
         }
     }
 
