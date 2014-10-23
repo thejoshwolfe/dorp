@@ -92,9 +92,7 @@ public class SemanticAnalyzer
                         instantiation.returnType = returnType;
                         returnTypes.add(returnType);
                     }
-                    DorpType returnType = returnTypes.get(0);
-                    for (int i = 1; i < returnTypes.size(); i++)
-                        returnType = mergeTypes(returnType, returnTypes.get(i));
+                    DorpType returnType = mergeTypes(returnTypes.toArray(new DorpType[0]));
                     return new FunctionCall(function, returnType, argumentValues);
                 }
                 throw null;
@@ -143,7 +141,7 @@ public class SemanticAnalyzer
                     definition = namespace.lookup(name);
                     if (definition.constantValue != null)
                         throw new RuntimeException();
-                    definition.type = mergeTypes(definition.type, value.getType());
+                    assignTypes(definition.type, value.getType());
                 } else
                     throw null;
                 return new Assignment(definition, value);
@@ -159,11 +157,55 @@ public class SemanticAnalyzer
         }
     }
 
-    private DorpType mergeTypes(DorpType type1, DorpType type2)
+    private void assignTypes(DorpType intoType, DorpType newType)
     {
-        if (type1 == type2)
-            return type1;
+        if (isPrimitive(intoType)) {
+            if (newType != intoType)
+                throw new RuntimeException();
+            return;
+        }
+        if (intoType instanceof TemplateFunctionReference) {
+            TemplateFunctionReference reference = (TemplateFunctionReference)intoType;
+            if (!(newType instanceof TemplateFunctionType))
+                throw new RuntimeException();
+            TemplateFunctionType otherTemplate = (TemplateFunctionType)newType;
+            if (otherTemplate.getArgumentCount() != reference.getArgumentCount())
+                throw new RuntimeException();
+            reference.references.add(otherTemplate);
+            return;
+        }
         throw new RuntimeException();
+    }
+
+    private DorpType mergeTypes(DorpType... types)
+    {
+        DorpType firstType = types[0];
+        if (isPrimitive(firstType)) {
+            for (int i = 1; i < types.length; i++)
+                if (types[i] != firstType)
+                    throw new RuntimeException();
+            return firstType;
+        }
+        if (firstType instanceof TemplateFunctionType) {
+            TemplateFunctionType firstTemplate = (TemplateFunctionType)firstType;
+            int argumentCount = firstTemplate.getArgumentCount();
+            TemplateFunctionReference reference = new TemplateFunctionReference(firstTemplate);
+            for (int i = 1; i < types.length; i++) {
+                if (!(types[i] instanceof TemplateFunctionType))
+                    throw new RuntimeException();
+                TemplateFunctionType otherTemplate = (TemplateFunctionType)types[i];
+                if (otherTemplate.getArgumentCount() != argumentCount)
+                    throw new RuntimeException();
+                reference.references.add(otherTemplate);
+            }
+            return reference;
+        }
+        throw new RuntimeException();
+    }
+
+    private boolean isPrimitive(DorpType type)
+    {
+        return type == voidType || type == booleanType || type == integerType;
     }
 
     private int nextBlockIndex = 0;
