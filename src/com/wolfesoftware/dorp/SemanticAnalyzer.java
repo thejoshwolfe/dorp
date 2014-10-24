@@ -136,7 +136,13 @@ public class SemanticAnalyzer
                 if (syntaxNode.type == NodeType.DEFINITION) {
                     definition = namespace.defineConstant(name, value);
                 } else if (syntaxNode.type == NodeType.VARIABLE_DECLARATION) {
-                    definition = namespace.defineVariable(name, value.getType());
+                    DorpType type = value.getType();
+                    if (type instanceof TemplateFunctionType) {
+                        // need to make a reference so that the variable's later assignments don't
+                        // contaminate this value's references
+                        type = new TemplateFunctionReference((TemplateFunctionType)type);
+                    }
+                    definition = namespace.defineVariable(name, type);
                 } else if (syntaxNode.type == NodeType.ASSIGNMENT) {
                     definition = namespace.lookup(name);
                     if (definition.constantValue != null)
